@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="vipdesk_purple">#FF7E3E97</color>
+    <color name="vipdesk_purple_dark">#FF5C2D70</color>
+    <color name="vipdesk_purple_light">#FFA569BD</color>
+    <color name="vipdesk_green">#FF2FAC66</color>
+    <color name="vipdesk_red">#FFE74C3C</color>
     <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
+    <color name="purple_500">#FF7E3E97</color>
+    <color name="purple_700">#FF5C2D70</color>
     <color name="teal_200">#FF03DAC5</color>
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
