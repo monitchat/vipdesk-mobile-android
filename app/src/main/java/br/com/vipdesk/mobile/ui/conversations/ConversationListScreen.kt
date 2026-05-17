@@ -52,8 +52,7 @@ fun ConversationListScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showLogoutDialog = false
-                    viewModel.logout()
-                    onLogout()
+                    viewModel.logout { onLogout() }
                 }) {
                     Text("Sair", color = VipDeskRed)
                 }

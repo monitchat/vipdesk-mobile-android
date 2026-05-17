@@ -38,7 +38,7 @@ interface ApiService {
     suspend fun getConversation(
         @Path("id") conversationId: Int,
         @QueryMap params: Map<String, String> = emptyMap()
-    ): Response<Conversation>
+    ): Response<ApiResponse<ConversationDetail>>
 
     @GET("conversation/{id}/read")
     suspend fun markAsRead(@Path("id") conversationId: Int): Response<Any>

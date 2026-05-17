@@ -20,6 +20,7 @@ datastore = "1.1.1"
 coroutines = "1.9.0"
 gson = "2.11.0"
 accompanist = "0.36.0"
+pusher = "2.4.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -69,6 +70,7 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 
 # Gson
 gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
+pusher-client = { group = "com.pusher", name = "pusher-java-client", version.ref = "pusher" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

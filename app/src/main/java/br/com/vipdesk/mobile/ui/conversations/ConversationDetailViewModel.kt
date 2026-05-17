@@ -10,6 +10,8 @@ import br.com.vipdesk.mobile.data.local.TokenManager
 import br.com.vipdesk.mobile.data.model.*
 import br.com.vipdesk.mobile.data.repository.AuthRepository
 import br.com.vipdesk.mobile.data.repository.ConversationRepository
+import br.com.vipdesk.mobile.data.socket.SocketEvent
+import br.com.vipdesk.mobile.data.socket.SocketService
 import br.com.vipdesk.mobile.di.AppContainer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +21,7 @@ import java.io.File
 import java.io.FileOutputStream
 
 data class ConversationDetailUiState(
-    val conversation: Conversation? = null,
+    val conversation: ConversationDetail? = null,
     val messages: List<Message> = emptyList(),
     val comments: List<Comment> = emptyList(),
     val isLoadingMessages: Boolean = false,
@@ -44,6 +46,7 @@ class ConversationDetailViewModel(
     private val conversationRepository: ConversationRepository,
     private val authRepository: AuthRepository,
     private val tokenManager: TokenManager,
+    private val socketService: SocketService,
     private val context: Context
 ) : ViewModel() {
 
@@ -51,13 +54,13 @@ class ConversationDetailViewModel(
     val uiState: StateFlow<ConversationDetailUiState> = _uiState.asStateFlow()
 
     private var messageSkip = 0
-    private val messageTake = 15
+    private val messageTake = 30
 
     init {
         loadCurrentUser()
-        loadConversation()
-        loadMessages()
+        loadAll()
         markAsRead()
+        listenToSocketEvents()
     }
 
     private fun loadCurrentUser() {
@@ -69,26 +72,37 @@ class ConversationDetailViewModel(
 
     private fun loadConversation() {
         viewModelScope.launch {
-            conversationRepository.getConversation(conversationId).onSuccess { conv ->
-                _uiState.value = _uiState.value.copy(conversation = conv)
-            }
-            conversationRepository.getConversationTickets(conversationId).onSuccess { tickets ->
-                _uiState.value = _uiState.value.copy(tickets = tickets)
+            conversationRepository.getConversation(conversationId).onSuccess { detail ->
+                _uiState.value = _uiState.value.copy(
+                    conversation = detail,
+                    messages = detail.messages,
+                    comments = detail.comments,
+                    tickets = detail.tickets,
+                    isLoadingMessages = false
+                )
             }
         }
     }
 
-    fun loadMessages() {
+    /** Load conversation detail + messages */
+    fun loadAll() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingMessages = true)
-            messageSkip = 0
-            conversationRepository.getMessages(conversationId, messageTake, 0).fold(
+
+            // Load conversation detail (includes initial messages)
+            conversationRepository.getConversation(conversationId).onSuccess { detail ->
+                _uiState.value = _uiState.value.copy(
+                    conversation = detail,
+                    tickets = detail.tickets
+                )
+            }
+
+            // Load messages from paginated endpoint (most recent first)
+            conversationRepository.getMessages(conversationId, 50, 0).fold(
                 onSuccess = { messages ->
-                    messageSkip = messages.size
                     _uiState.value = _uiState.value.copy(
-                        messages = messages.reversed(),
-                        isLoadingMessages = false,
-                        canLoadMore = messages.size >= messageTake
+                        messages = messages, // API returns in chronological order
+                        isLoadingMessages = false
                     )
                 },
                 onFailure = {
@@ -96,26 +110,6 @@ class ConversationDetailViewModel(
                         isLoadingMessages = false,
                         error = it.message
                     )
-                }
-            )
-        }
-    }
-
-    fun loadMoreMessages() {
-        if (_uiState.value.isLoadingMore || !_uiState.value.canLoadMore) return
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoadingMore = true)
-            conversationRepository.getMessages(conversationId, messageTake, messageSkip).fold(
-                onSuccess = { olderMessages ->
-                    messageSkip += olderMessages.size
-                    _uiState.value = _uiState.value.copy(
-                        messages = olderMessages.reversed() + _uiState.value.messages,
-                        isLoadingMore = false,
-                        canLoadMore = olderMessages.size >= messageTake
-                    )
-                },
-                onFailure = {
-                    _uiState.value = _uiState.value.copy(isLoadingMore = false)
                 }
             )
         }
@@ -207,7 +201,7 @@ class ConversationDetailViewModel(
                 conversationRepository.uploadFile(conversationId, tempFile, mimeType).fold(
                     onSuccess = {
                         _uiState.value = _uiState.value.copy(isSending = false)
-                        loadMessages()
+                        loadAll()
                     },
                     onFailure = {
                         _uiState.value = _uiState.value.copy(
@@ -265,7 +259,7 @@ class ConversationDetailViewModel(
                         showTransferDialog = false,
                         actionSuccess = "Atendimento transferido com sucesso"
                     )
-                    loadConversation()
+                    loadAll()
                 },
                 onFailure = {
                     _uiState.value = _uiState.value.copy(
@@ -285,7 +279,7 @@ class ConversationDetailViewModel(
                         showAssignDialog = false,
                         actionSuccess = "Atendente atribuido com sucesso"
                     )
-                    loadConversation()
+                    loadAll()
                 },
                 onFailure = {
                     _uiState.value = _uiState.value.copy(
@@ -317,6 +311,37 @@ class ConversationDetailViewModel(
         }
     }
 
+    private fun listenToSocketEvents() {
+        viewModelScope.launch {
+            socketService.events.collect { event ->
+                when (event) {
+                    is SocketEvent.MessageReceived, is SocketEvent.MessageAnswered -> {
+                        // Check if message belongs to this conversation
+                        val data = if (event is SocketEvent.MessageReceived) event.data else (event as SocketEvent.MessageAnswered).data
+                        val msgConversationId = data.get("conversation_id")?.asInt
+                            ?: data.get("data")?.asJsonObject?.get("conversation_id")?.asInt
+                        if (msgConversationId == conversationId) {
+                            loadAll()
+                            markAsRead()
+                        }
+                    }
+                    is SocketEvent.MessageUpdated -> {
+                        val data = event.data
+                        val msgConversationId = data.get("conversation_id")?.asInt
+                            ?: data.get("data")?.asJsonObject?.get("conversation_id")?.asInt
+                        if (msgConversationId == conversationId) {
+                            loadAll()
+                        }
+                    }
+                    is SocketEvent.TicketChangedOwner, is SocketEvent.TicketChangedStatus -> {
+                        loadAll()
+                    }
+                    else -> { }
+                }
+            }
+        }
+    }
+
     class Factory(private val conversationId: Int) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -325,6 +350,7 @@ class ConversationDetailViewModel(
                 conversationRepository = AppContainer.conversationRepository,
                 authRepository = AppContainer.authRepository,
                 tokenManager = AppContainer.tokenManager,
+                socketService = AppContainer.socketService,
                 context = AppContainer.appContext
             ) as T
         }

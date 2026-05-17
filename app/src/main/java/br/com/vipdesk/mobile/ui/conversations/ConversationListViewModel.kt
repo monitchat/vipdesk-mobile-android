@@ -9,6 +9,8 @@ import br.com.vipdesk.mobile.data.model.ConversationCountResponse
 import br.com.vipdesk.mobile.data.repository.AuthRepository
 import br.com.vipdesk.mobile.data.repository.ConversationRepository
 import br.com.vipdesk.mobile.data.local.TokenManager
+import br.com.vipdesk.mobile.data.socket.SocketEvent
+import br.com.vipdesk.mobile.data.socket.SocketService
 import br.com.vipdesk.mobile.di.AppContainer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,13 +28,15 @@ data class ConversationListUiState(
     val currentMedia: String = "",
     val counts: ConversationCountResponse = ConversationCountResponse(),
     val channelCounts: ChannelCounts = ChannelCounts(),
-    val currentUserId: Int? = null
+    val currentUserId: Int? = null,
+    val socketConnected: Boolean = false
 )
 
 class ConversationListViewModel(
     private val conversationRepository: ConversationRepository,
     private val authRepository: AuthRepository,
-    private val tokenManager: TokenManager
+    private val tokenManager: TokenManager,
+    private val socketService: SocketService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ConversationListUiState())
@@ -41,12 +45,62 @@ class ConversationListViewModel(
     init {
         loadCurrentUser()
         loadConversations()
+        listenToSocketEvents()
     }
 
     private fun loadCurrentUser() {
         viewModelScope.launch {
             val userId = tokenManager.getUserId()
+            val companyId = tokenManager.getCompanyId()
             _uiState.value = _uiState.value.copy(currentUserId = userId)
+
+            // Connect socket (only if not already connected)
+            if (userId != null && companyId != null && !socketService.isConnected) {
+                socketService.connect(companyId, userId)
+                _uiState.value = _uiState.value.copy(socketConnected = true)
+            }
+        }
+    }
+
+    private fun listenToSocketEvents() {
+        viewModelScope.launch {
+            socketService.events.collect { event ->
+                when (event) {
+                    is SocketEvent.MessageReceived,
+                    is SocketEvent.MessageAnswered,
+                    is SocketEvent.NewTicketCreated,
+                    is SocketEvent.TicketChangedOwner,
+                    is SocketEvent.TicketChangedStatus,
+                    is SocketEvent.TicketDeleted,
+                    is SocketEvent.ConversationCountChanged -> {
+                        // Reload conversation list on any relevant event
+                        silentRefresh()
+                    }
+                    is SocketEvent.UserLoggedOut -> {
+                        // Force logout
+                        authRepository.logout()
+                    }
+                    else -> { }
+                }
+            }
+        }
+    }
+
+    private fun silentRefresh() {
+        viewModelScope.launch {
+            val result = conversationRepository.getConversations(
+                status = _uiState.value.currentStatus,
+                media = _uiState.value.currentMedia
+            )
+            result.onSuccess { conversations ->
+                val filtered = applyFilters(conversations, _uiState.value.currentMedia, _uiState.value.searchQuery)
+                _uiState.value = _uiState.value.copy(
+                    conversations = conversations,
+                    filteredConversations = filtered,
+                    counts = conversationRepository.lastCounts ?: _uiState.value.counts,
+                    channelCounts = conversationRepository.lastChannelCounts ?: _uiState.value.channelCounts
+                )
+            }
         }
     }
 
@@ -119,18 +173,21 @@ class ConversationListViewModel(
     fun onMediaChange(media: String) {
         val newMedia = if (_uiState.value.currentMedia == media) "" else media
         _uiState.value = _uiState.value.copy(currentMedia = newMedia)
-        // Apply client-side filter immediately, then also reload from API
         _uiState.value = _uiState.value.copy(
             filteredConversations = applyFilters(_uiState.value.conversations, newMedia, _uiState.value.searchQuery)
         )
         loadConversations()
     }
 
-    fun logout() {
+    fun logout(onDone: () -> Unit) {
         viewModelScope.launch {
+            socketService.disconnect()
             authRepository.logout()
+            onDone()
         }
     }
+
+    // Don't disconnect socket on ViewModel clear - it's a singleton managed by AppContainer
 
     private fun applyFilters(
         conversations: List<Conversation>,
@@ -139,7 +196,6 @@ class ConversationListViewModel(
     ): List<Conversation> {
         var result = conversations
 
-        // Filter by channel (client-side, same as frontend)
         if (media.isNotBlank()) {
             result = result.filter { conv ->
                 conv.source?.equals(media, ignoreCase = true) == true ||
@@ -147,7 +203,6 @@ class ConversationListViewModel(
             }
         }
 
-        // Filter by search query
         if (query.isNotBlank()) {
             val lowerQuery = query.lowercase()
             result = result.filter { conv ->
@@ -168,7 +223,8 @@ class ConversationListViewModel(
                 return ConversationListViewModel(
                     AppContainer.conversationRepository,
                     AppContainer.authRepository,
-                    AppContainer.tokenManager
+                    AppContainer.tokenManager,
+                    AppContainer.socketService
                 ) as T
             }
         }

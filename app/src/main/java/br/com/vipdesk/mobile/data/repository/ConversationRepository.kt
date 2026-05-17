@@ -51,11 +51,11 @@ class ConversationRepository(private val apiService: ApiService) {
         }
     }
 
-    suspend fun getConversation(conversationId: Int): Result<Conversation> {
+    suspend fun getConversation(conversationId: Int): Result<ConversationDetail> {
         return try {
             val response = apiService.getConversation(conversationId)
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+            if (response.isSuccessful && response.body()?.data != null) {
+                Result.success(response.body()!!.data!!)
             } else {
                 Result.failure(Exception("Erro ao buscar conversa"))
             }

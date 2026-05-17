@@ -39,6 +39,21 @@ data class Conversation(
     @SerializedName("new") val isNew: Boolean = false
 )
 
+data class ConversationDetail(
+    val id: Int,
+    val contact: Contact,
+    val source: String? = null,
+    @SerializedName("last_message") val lastMessage: LastMessage? = null,
+    @SerializedName("last_ticket_source") val lastTicketSource: String? = null,
+    @SerializedName("unread_messages") val unreadMessages: Int = 0,
+    @SerializedName("auto_reply") val autoReply: Int = 0,
+    @SerializedName("activeTicket") val activeTicket: Ticket? = null,
+    val messages: List<Message> = emptyList(),
+    val comments: List<Comment> = emptyList(),
+    val tickets: List<Ticket> = emptyList(),
+    @SerializedName("account_number") val accountNumber: String? = null
+)
+
 data class Contact(
     val id: Int,
     val name: String,

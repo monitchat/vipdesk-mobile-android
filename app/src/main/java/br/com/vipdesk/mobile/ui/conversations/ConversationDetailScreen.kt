@@ -56,16 +56,13 @@ fun ConversationDetailScreen(
     // Auto-scroll to bottom when new messages arrive
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.messages.size - 1)
+            try {
+                listState.scrollToItem(uiState.messages.size - 1)
+            } catch (_: Exception) { }
         }
     }
 
-    // Load more when scrolling to top
-    LaunchedEffect(listState.firstVisibleItemIndex) {
-        if (listState.firstVisibleItemIndex == 0 && uiState.canLoadMore && !uiState.isLoadingMore) {
-            viewModel.loadMoreMessages()
-        }
-    }
+
 
     // Show error snackbar
     LaunchedEffect(uiState.error) {
@@ -272,7 +269,7 @@ fun ConversationDetailScreen(
                             }
                             items(
                                 items = uiState.messages,
-                                key = { it.id }
+                                key = { "${it.id}_${uiState.messages.indexOf(it)}" }
                             ) { message ->
                                 MessageBubble(
                                     message = message,
@@ -322,12 +319,7 @@ private fun MessageBubble(
     }
 
     val mediaUrl = message.getMediaUrl(cdnUrl)
-
-    // Check if type "3" is actually audio by file extension
-    val isAudioDocument = message.type == "3" && message.fileName?.let {
-        val ext = it.substringAfterLast(".", "").lowercase()
-        ext in listOf("mp3", "wav", "ogg")
-    } == true
+    val msgType = message.messageType
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -342,8 +334,8 @@ private fun MessageBubble(
             Column(
                 modifier = Modifier.padding(8.dp)
             ) {
-                // Sender name for received messages
-                if (!isOwnMessage && message.user != null) {
+                // Sender name for sent messages (show agent name)
+                if (isOwnMessage && message.user != null && message.user.name.isNotBlank()) {
                     Text(
                         text = message.user.name,
                         fontSize = 11.sp,
@@ -355,23 +347,28 @@ private fun MessageBubble(
 
                 // Media content
                 when {
-                    // Image
-                    message.type == "4" && mediaUrl != null -> {
+                    // Image (type 4)
+                    msgType == 4 && mediaUrl != null -> {
                         InlineImage(imageUrl = mediaUrl)
                     }
 
-                    // Audio
-                    (message.type == "5" || message.type == "2" || isAudioDocument) && mediaUrl != null -> {
+                    // Audio (type 2 or 5, or type 3 with audio extension)
+                    (msgType == 5 || msgType == 2) && mediaUrl != null -> {
+                        AudioPlayer(audioUrl = mediaUrl)
+                    }
+                    msgType == 3 && mediaUrl != null && message.fileName?.let {
+                        it.substringAfterLast(".", "").lowercase() in listOf("mp3", "wav", "ogg")
+                    } == true -> {
                         AudioPlayer(audioUrl = mediaUrl)
                     }
 
-                    // Video
-                    message.type == "1" && mediaUrl != null -> {
+                    // Video (type 1)
+                    msgType == 1 && mediaUrl != null -> {
                         VideoThumbnail(videoUrl = mediaUrl)
                     }
 
-                    // Document
-                    message.type == "3" && mediaUrl != null -> {
+                    // Document (type 3)
+                    msgType == 3 && mediaUrl != null -> {
                         DocumentMessage(
                             fileName = message.fileName,
                             documentUrl = mediaUrl
@@ -381,7 +378,7 @@ private fun MessageBubble(
 
                 // Message text (show below media if present)
                 if (!message.message.isNullOrEmpty()) {
-                    if (message.type in listOf("4", "1")) {
+                    if (msgType in listOf(4, 1)) {
                         Spacer(modifier = Modifier.height(4.dp))
                     }
                     Text(

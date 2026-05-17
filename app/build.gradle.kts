@@ -88,6 +88,9 @@ dependencies {
     // Gson
     implementation(libs.gson)
 
+    // Pusher (WebSocket real-time)
+    implementation(libs.pusher.client)
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
