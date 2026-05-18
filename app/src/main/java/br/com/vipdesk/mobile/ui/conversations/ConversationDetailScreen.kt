@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -43,6 +45,7 @@ fun ConversationDetailScreen(
     viewModel: ConversationDetailViewModel
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val c = AppTheme.colors
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -116,7 +119,7 @@ fun ConversationDetailScreen(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(AvatarGreen),
+                                .background(PurpleGradientLight),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -213,12 +216,12 @@ fun ConversationDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(SurfaceLight)
+                .background(c.background)
         ) {
             // Tab indicator
             TabRow(
                 selectedTabIndex = uiState.activeTab,
-                containerColor = Color.White,
+                containerColor = c.surface,
                 contentColor = VipDeskPurple,
                 modifier = Modifier.height(40.dp)
             ) {
@@ -267,10 +270,15 @@ fun ConversationDetailScreen(
                                     }
                                 }
                             }
-                            items(
+                            itemsIndexed(
                                 items = uiState.messages,
-                                key = { "${it.id}_${uiState.messages.indexOf(it)}" }
-                            ) { message ->
+                                key = { idx, it -> "${it.id}_$idx" }
+                            ) { idx, message ->
+                                val prev = if (idx > 0) uiState.messages[idx - 1] else null
+                                val showDay = dayKey(message.createdAt) != dayKey(prev?.createdAt)
+                                if (showDay) {
+                                    DaySeparator(dayLabel(message.createdAt))
+                                }
                                 MessageBubble(
                                     message = message,
                                     isOwnMessage = message.sender == 1,
@@ -309,14 +317,16 @@ private fun MessageBubble(
     isOwnMessage: Boolean,
     currentUserId: Int?
 ) {
+    val c = AppTheme.colors
     val cdnUrl = BuildConfig.CDN_URL
     val alignment = if (isOwnMessage) Arrangement.End else Arrangement.Start
-    val bgColor = if (isOwnMessage) SentMessageBg else ReceivedMessageBg
     val shape = if (isOwnMessage) {
-        RoundedCornerShape(12.dp, 4.dp, 12.dp, 12.dp)
+        RoundedCornerShape(18.dp, 6.dp, 18.dp, 18.dp)
     } else {
-        RoundedCornerShape(4.dp, 12.dp, 12.dp, 12.dp)
+        RoundedCornerShape(6.dp, 18.dp, 18.dp, 18.dp)
     }
+    val contentColor = if (isOwnMessage) Color.White else c.textPrimary
+    val metaColor = if (isOwnMessage) Color.White.copy(alpha = 0.7f) else c.textSecondary
 
     val mediaUrl = message.getMediaUrl(cdnUrl)
     val msgType = message.messageType
@@ -325,14 +335,18 @@ private fun MessageBubble(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = alignment
     ) {
-        Card(
-            modifier = Modifier.widthIn(max = 300.dp),
-            shape = shape,
-            colors = CardDefaults.cardColors(containerColor = bgColor),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        Box(
+            modifier = Modifier
+                .widthIn(max = 300.dp)
+                .shadow(2.dp, shape, clip = false)
+                .clip(shape)
+                .then(
+                    if (isOwnMessage) Modifier.background(OwnBubbleGradient)
+                    else Modifier.background(c.surface)
+                )
         ) {
             Column(
-                modifier = Modifier.padding(8.dp)
+                modifier = Modifier.padding(10.dp)
             ) {
                 // Sender name for sent messages (show agent name)
                 if (isOwnMessage && message.user != null && message.user.name.isNotBlank()) {
@@ -340,7 +354,7 @@ private fun MessageBubble(
                         text = message.user.name,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = VipDeskPurple
+                        color = if (isOwnMessage) Color.White else VipDeskPurple
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                 }
@@ -384,19 +398,33 @@ private fun MessageBubble(
                     Text(
                         text = message.message.replace(Regex("<[^>]*>"), ""),
                         fontSize = 14.sp,
-                        color = Color(0xFF1C1B1F)
+                        color = contentColor
                     )
                 }
 
-                // Timestamp
+                // Timestamp + read receipt
                 message.createdAt?.let { dateStr ->
                     Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = formatMessageTime(dateStr),
-                        fontSize = 10.sp,
-                        color = TextSecondary,
-                        modifier = Modifier.align(Alignment.End)
-                    )
+                    Row(
+                        modifier = Modifier.align(Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = formatMessageTime(dateStr),
+                            fontSize = 10.sp,
+                            color = metaColor
+                        )
+                        if (isOwnMessage) {
+                            Spacer(modifier = Modifier.width(3.dp))
+                            val read = (message.status ?: 0) >= 3
+                            Icon(
+                                imageVector = if (read) Icons.Default.DoneAll else Icons.Default.Done,
+                                contentDescription = if (read) "Lida" else "Enviada",
+                                tint = if (read) Color(0xFF8FD0FF) else metaColor,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -450,9 +478,10 @@ private fun MessageInputBar(
     onAttach: () -> Unit,
     isSending: Boolean
 ) {
+    val c = AppTheme.colors
     Surface(
         shadowElevation = 8.dp,
-        color = Color.White
+        color = c.surface
     ) {
         Row(
             modifier = Modifier
@@ -469,7 +498,7 @@ private fun MessageInputBar(
                 Icon(
                     Icons.Default.AttachFile,
                     contentDescription = "Anexar",
-                    tint = TextSecondary
+                    tint = c.iconMuted
                 )
             }
 
@@ -480,11 +509,18 @@ private fun MessageInputBar(
                 placeholder = { Text("Digite uma mensagem...", fontSize = 14.sp) },
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 40.dp, max = 120.dp),
-                shape = RoundedCornerShape(24.dp),
+                    .heightIn(min = 48.dp, max = 120.dp),
+                shape = RoundedCornerShape(28.dp),
                 colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = c.textPrimary,
+                    unfocusedTextColor = c.textPrimary,
+                    cursorColor = VipDeskPurple,
                     focusedBorderColor = VipDeskPurple,
-                    unfocusedBorderColor = CardBorder
+                    unfocusedBorderColor = c.fieldBorder,
+                    focusedContainerColor = c.fieldBackground,
+                    unfocusedContainerColor = c.fieldBackground,
+                    focusedPlaceholderColor = c.textSecondary,
+                    unfocusedPlaceholderColor = c.textSecondary
                 ),
                 maxLines = 4
             )
@@ -492,15 +528,16 @@ private fun MessageInputBar(
             Spacer(modifier = Modifier.width(8.dp))
 
             // Send button
+            val sendActive = text.isNotBlank() && !isSending
             IconButton(
                 onClick = onSend,
-                enabled = text.isNotBlank() && !isSending,
+                enabled = sendActive,
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(46.dp)
                     .clip(CircleShape)
-                    .background(
-                        if (text.isNotBlank() && !isSending) VipDeskPurple
-                        else CardBorder
+                    .then(
+                        if (sendActive) Modifier.background(PurpleGradient)
+                        else Modifier.background(c.fieldBorder)
                     )
             ) {
                 if (isSending) {
@@ -684,6 +721,67 @@ private fun formatMessageTime(dateStr: String): String {
             date?.let { timeFmt.format(it) } ?: dateStr
         } catch (_: Exception) {
             dateStr
+        }
+    }
+}
+
+private fun parseMsgDate(dateStr: String?): java.util.Date? {
+    if (dateStr.isNullOrBlank()) return null
+    val patterns = listOf(
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm:ssXXX",
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd"
+    )
+    for (p in patterns) {
+        try {
+            return java.text.SimpleDateFormat(p, java.util.Locale("pt", "BR")).parse(dateStr)
+        } catch (_: Exception) {
+        }
+    }
+    return null
+}
+
+private fun dayKey(dateStr: String?): String {
+    val d = parseMsgDate(dateStr) ?: return ""
+    return java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("pt", "BR")).format(d)
+}
+
+private fun dayLabel(dateStr: String?): String {
+    val d = parseMsgDate(dateStr) ?: return ""
+    val cal = java.util.Calendar.getInstance()
+    val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("pt", "BR")).format(cal.time)
+    cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
+    val yesterday = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("pt", "BR")).format(cal.time)
+    val key = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("pt", "BR")).format(d)
+    return when (key) {
+        today -> "Hoje"
+        yesterday -> "Ontem"
+        else -> java.text.SimpleDateFormat("dd 'de' MMMM", java.util.Locale("pt", "BR")).format(d)
+    }
+}
+
+@Composable
+private fun DaySeparator(label: String) {
+    if (label.isBlank()) return
+    val c = AppTheme.colors
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = c.surface,
+            shadowElevation = if (c.isDark) 0.dp else 1.dp,
+            modifier = Modifier.padding(vertical = 6.dp)
+        ) {
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = c.textSecondary,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+            )
         }
     }
 }

@@ -156,4 +156,38 @@ interface ApiService {
         @Query("take") take: Int = 20,
         @Query("page") page: Int = 1
     ): Response<ApiResponse<List<Message>>>
+
+    // ============ MOBILE ============
+
+    @GET("mobile/dashboard")
+    suspend fun getMobileDashboard(): Response<MobileDashboardEnvelope>
+
+    @GET("mobile/tickets")
+    suspend fun getMobileTickets(
+        @Query("status") status: String = "open",
+        @Query("q") q: String? = null
+    ): Response<MobileTicketsEnvelope>
+
+    @GET("mobile/notifications")
+    suspend fun getMobileNotifications(
+        @Query("filter") filter: String? = null
+    ): Response<MobileNotificationsEnvelope>
+
+    @POST("mobile/notifications/read-all")
+    suspend fun readAllNotifications(): Response<Any>
+
+    @POST("mobile/notifications/{id}/read")
+    suspend fun readNotification(@Path("id") id: Int): Response<Any>
+
+    @GET("mobile/ticket/{id}")
+    suspend fun getMobileTicket(@Path("id") id: Int): Response<MobileTicketEnvelope>
+
+    @POST("mobile/ticket/{id}/resolve")
+    suspend fun resolveTicket(@Path("id") id: Int): Response<Any>
+
+    @POST("ticket/{id}/claim")
+    suspend fun claimTicket(
+        @Path("id") id: Int,
+        @Body body: Map<String, String> = emptyMap()
+    ): Response<Any>
 }

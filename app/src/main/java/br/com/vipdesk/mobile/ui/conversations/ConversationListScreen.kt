@@ -1,20 +1,16 @@
 package br.com.vipdesk.mobile.ui.conversations
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ConfirmationNumber
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -22,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -31,152 +26,108 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import br.com.vipdesk.mobile.data.model.Conversation
-import coil.compose.AsyncImage
+import br.com.vipdesk.mobile.ui.common.initialsOf
+import br.com.vipdesk.mobile.ui.common.relativeTime
+import br.com.vipdesk.mobile.ui.common.sourceVisual
 import br.com.vipdesk.mobile.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationListScreen(
     onConversationClick: (Int) -> Unit,
-    onLogout: () -> Unit,
     viewModel: ConversationListViewModel = viewModel(factory = ConversationListViewModel.Factory)
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var showLogoutDialog by remember { mutableStateOf(false) }
+    val c = AppTheme.colors
 
-    if (showLogoutDialog) {
-        AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
-            title = { Text("Sair") },
-            text = { Text("Deseja realmente sair da sua conta?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showLogoutDialog = false
-                    viewModel.logout { onLogout() }
-                }) {
-                    Text("Sair", color = VipDeskRed)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) {
-                    Text("Cancelar")
-                }
-            }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(c.background)
+    ) {
+        // Header
+        Text(
+            text = "Conversas",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = c.textPrimary,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)
         )
-    }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    AsyncImage(
-                        model = "${br.com.vipdesk.mobile.BuildConfig.CDN_URL}/logo/logo-vipdesk-mobile.png",
-                        contentDescription = "VipDesk",
-                        modifier = Modifier.height(32.dp),
-                        contentScale = ContentScale.Fit
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = VipDeskPurple
-                ),
-                actions = {
-                    IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, "Atualizar", tint = Color.White)
-                    }
-                    IconButton(onClick = { showLogoutDialog = true }) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, "Sair", tint = Color.White)
-                    }
-                }
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Search pill
+        SearchPill(
+            query = uiState.searchQuery,
+            onQueryChange = viewModel::onSearchQueryChange
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Status filter chips
+        StatusChips(
+            currentStatus = uiState.currentStatus,
+            counts = uiState.counts,
+            onStatusChange = viewModel::onStatusChange
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.fillMaxSize()
         ) {
-            // Search bar
-            SearchBar(
-                query = uiState.searchQuery,
-                onQueryChange = viewModel::onSearchQueryChange
-            )
+            when {
+                uiState.isLoading && uiState.conversations.isEmpty() -> {
+                    CenterBox { CircularProgressIndicator(color = VipDeskPurple) }
+                }
 
-            // Channel filter buttons
-            ChannelFilterBar(
-                channelCounts = uiState.channelCounts,
-                currentMedia = uiState.currentMedia,
-                onMediaChange = viewModel::onMediaChange
-            )
-
-            // Status filter tabs
-            StatusFilterTabs(
-                currentStatus = uiState.currentStatus,
-                counts = uiState.counts,
-                onStatusChange = viewModel::onStatusChange
-            )
-
-            // Conversation list
-            PullToRefreshBox(
-                isRefreshing = uiState.isRefreshing,
-                onRefresh = { viewModel.refresh() },
-                modifier = Modifier.fillMaxSize()
-            ) {
-                when {
-                    uiState.isLoading && uiState.conversations.isEmpty() -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(color = VipDeskPurple)
-                        }
-                    }
-
-                    uiState.error != null && uiState.conversations.isEmpty() -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = uiState.error ?: "Erro desconhecido",
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                TextButton(onClick = { viewModel.loadConversations() }) {
-                                    Text("Tentar novamente")
-                                }
+                uiState.error != null && uiState.conversations.isEmpty() -> {
+                    CenterBox {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = uiState.error ?: "Erro desconhecido",
+                                color = VipDeskRed,
+                                fontSize = 13.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            TextButton(onClick = { viewModel.loadConversations() }) {
+                                Text("Tentar novamente", color = VipDeskPurple)
                             }
                         }
                     }
+                }
 
-                    uiState.filteredConversations.isEmpty() -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Nenhuma conversa encontrada",
-                                color = TextSecondary
+                uiState.filteredConversations.isEmpty() -> {
+                    CenterBox {
+                        Text(
+                            text = "Nenhuma conversa encontrada",
+                            color = c.textSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(
+                            items = uiState.filteredConversations,
+                            key = { it.id }
+                        ) { conversation ->
+                            ConversationRow(
+                                conversation = conversation,
+                                currentUserId = uiState.currentUserId,
+                                onClick = { onConversationClick(conversation.id) }
                             )
                         }
                     }
-
-                    else -> {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            items(
-                                items = uiState.filteredConversations,
-                                key = { it.id }
-                            ) { conversation ->
-                                ConversationCardItem(
-                                    conversation = conversation,
-                                    currentUserId = uiState.currentUserId,
-                                    onClick = { onConversationClick(conversation.id) }
-                                )
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -184,123 +135,14 @@ fun ConversationListScreen(
 }
 
 @Composable
-private fun ChannelFilterBar(
-    channelCounts: br.com.vipdesk.mobile.data.model.ChannelCounts,
-    currentMedia: String,
-    onMediaChange: (String) -> Unit
-) {
-    val channels = listOf(
-        Triple("whatsapp", channelCounts.whatsapp, WhatsAppGreen),
-        Triple("facebook", channelCounts.facebook, Color(0xFF1877F2)),
-        Triple("instagram", channelCounts.instagram, Color(0xFFE4405F)),
-        Triple("telegram", channelCounts.telegram, Color(0xFF0088CC)),
-        Triple("webchat", channelCounts.webchat, WebChatGray),
-        Triple("monitcall", channelCounts.monitcall, PhoneOrange)
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        channels.forEach { (media, count, color) ->
-            val isSelected = currentMedia == media
-            val icon = when (media) {
-                "whatsapp" -> Icons.Default.Forum
-                "facebook" -> Icons.Default.Facebook
-                "instagram" -> Icons.Default.CameraAlt
-                "telegram" -> Icons.AutoMirrored.Filled.Send
-                "webchat" -> Icons.Default.Language
-                "monitcall" -> Icons.Default.Phone
-                else -> Icons.Default.Forum
-            }
-            OutlinedButton(
-                onClick = { onMediaChange(media) },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(34.dp),
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = if (isSelected) color else Color.Transparent,
-                    contentColor = if (isSelected) Color.White else color
-                ),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    if (isSelected) color else color.copy(alpha = 0.4f)
-                ),
-                contentPadding = PaddingValues(0.dp)
-            ) {
-                Icon(icon, contentDescription = media, modifier = Modifier.size(14.dp))
-                Spacer(modifier = Modifier.width(3.dp))
-                Text(count.toString(), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatusFilterTabs(
-    currentStatus: String,
-    counts: br.com.vipdesk.mobile.data.model.ConversationCountResponse,
-    onStatusChange: (String) -> Unit
-) {
-    val tabs = listOf(
-        Triple("assigned", "Meus", counts.assigned),
-        Triple("waiting", "Aguardando", counts.waiting),
-        Triple("all", "Todos", counts.total)
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        tabs.forEach { (status, label, count) ->
-            val isSelected = currentStatus == status
-
-            OutlinedButton(
-                onClick = { onStatusChange(status) },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(34.dp),
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = if (isSelected) VipDeskPurple else Color.Transparent,
-                    contentColor = if (isSelected) Color.White else VipDeskPurple
-                ),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    if (isSelected) VipDeskPurple else VipDeskPurple.copy(alpha = 0.3f)
-                ),
-                contentPadding = PaddingValues(0.dp)
-            ) {
-                Text(
-                    "$label $count",
-                    fontSize = 12.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchBar(
-    query: String,
-    onQueryChange: (String) -> Unit
-) {
+private fun SearchPill(query: String, onQueryChange: (String) -> Unit) {
+    val c = AppTheme.colors
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
         placeholder = { Text("Buscar conversa...", fontSize = 14.sp) },
         leadingIcon = {
-            Icon(
-                Icons.Default.Search,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp)
-            )
+            Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp))
         },
         trailingIcon = {
             if (query.isNotEmpty()) {
@@ -312,190 +154,226 @@ private fun SearchBar(
         singleLine = true,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(24.dp),
+            .padding(horizontal = 20.dp)
+            .heightIn(min = 54.dp),
+        shape = RoundedCornerShape(28.dp),
         colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = c.textPrimary,
+            unfocusedTextColor = c.textPrimary,
+            cursorColor = VipDeskPurple,
             focusedBorderColor = VipDeskPurple,
-            unfocusedBorderColor = CardBorder
+            unfocusedBorderColor = c.fieldBorder,
+            focusedLeadingIconColor = VipDeskPurple,
+            unfocusedLeadingIconColor = c.iconMuted,
+            focusedContainerColor = c.surface,
+            unfocusedContainerColor = c.surface,
+            focusedPlaceholderColor = c.textSecondary,
+            unfocusedPlaceholderColor = c.textSecondary
         )
     )
 }
 
 @Composable
-private fun ConversationCardItem(
+private fun StatusChips(
+    currentStatus: String,
+    counts: br.com.vipdesk.mobile.data.model.ConversationCountResponse,
+    onStatusChange: (String) -> Unit
+) {
+    val c = AppTheme.colors
+    val tabs = listOf(
+        Triple("assigned", "Meus", counts.assigned),
+        Triple("waiting", "Aguardando", counts.waiting),
+        Triple("all", "Todos", counts.total)
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        tabs.forEach { (status, label, count) ->
+            val selected = currentStatus == status
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (selected) VipDeskPurple else c.surface)
+                    .clickable { onStatusChange(status) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "$label · $count",
+                    fontSize = 12.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (selected) Color.White else c.textSecondary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConversationRow(
     conversation: Conversation,
     currentUserId: Int?,
     onClick: () -> Unit
 ) {
-    val departmentColor = conversation.activeTicket?.departmentColor?.let {
-        try {
-            Color(android.graphics.Color.parseColor(it))
-        } catch (_: Exception) {
-            VipDeskPurple
-        }
-    } ?: VipDeskPurple
+    val c = AppTheme.colors
+    val state = conversation.conversationState
+    val statusColor = when (state) {
+        "available", "composing" -> OnlineGreen
+        else -> AwayGray
+    }
+    val source = conversation.source ?: conversation.lastTicketSource
+    val visual = sourceVisual(source)
+    val isMine = conversation.activeTicket?.userId == currentUserId
 
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = c.surface,
+        shadowElevation = if (c.isDark) 0.dp else 2.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.Top
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Source indicator bar
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(56.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(departmentColor)
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Avatar
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(AvatarGreen),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = getInitials(conversation.contact.name),
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
+            Box {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(PurpleGradientLight),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = initialsOf(conversation.contact.name),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(13.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .padding(2.dp)
+                        .clip(CircleShape)
+                        .background(statusColor)
                 )
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
-            // Content
             Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = conversation.contact.name,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp,
+                        color = c.textPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f, fill = false)
                     )
-
-                    // Icons row
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Source icon
-                        SourceIcon(conversation.source ?: conversation.lastTicketSource)
-
-                        // Unread badge
-                        if (conversation.unreadMessages > 0) {
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Badge(
-                                containerColor = VipDeskGreen,
-                                contentColor = Color.White
-                            ) {
-                                Text(
-                                    text = conversation.unreadMessages.toString(),
-                                    fontSize = 10.sp
-                                )
-                            }
-                        }
-
-                        // My ticket indicator
-                        if (conversation.activeTicket?.userId == currentUserId) {
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                Icons.Default.ConfirmationNumber,
-                                contentDescription = "Meu atendimento",
-                                modifier = Modifier.size(14.dp),
-                                tint = VipDeskPurple
-                            )
-                        }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        visual.icon,
+                        contentDescription = source,
+                        tint = visual.color,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    if (isMine) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            Icons.Default.ConfirmationNumber,
+                            contentDescription = "Meu atendimento",
+                            tint = VipDeskPurple,
+                            modifier = Modifier.size(13.dp)
+                        )
                     }
                 }
 
-                // Client name
-                if (conversation.contact.client?.name != null) {
+                conversation.contact.client?.name?.let {
                     Text(
-                        text = conversation.contact.client.name,
+                        text = it,
                         fontSize = 11.sp,
-                        color = TextSecondary,
+                        color = VipDeskPurple,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(3.dp))
 
-                // Last message or status
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    when (conversation.conversationState) {
-                        "composing" -> {
-                            Text(
-                                text = "digitando...",
-                                fontSize = 12.sp,
-                                fontStyle = FontStyle.Italic,
-                                fontWeight = FontWeight.Bold,
-                                color = VipDeskGreen,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        "available" -> {
-                            Text(
-                                text = "online",
-                                fontSize = 12.sp,
-                                fontStyle = FontStyle.Italic,
-                                fontWeight = FontWeight.Bold,
-                                color = VipDeskGreen,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        else -> {
-                            val lastMsg = conversation.lastMessage
-                            val messagePreview = when (lastMsg?.type) {
-                                "4" -> "\uD83D\uDCF7 Imagem"
-                                "5", "2" -> "\uD83C\uDFA4 Audio"
-                                "1" -> "\uD83C\uDFA5 Video"
-                                "3" -> "\uD83D\uDCC4 Documento"
-                                else -> lastMsg?.message?.replace(Regex("<[^>]*>"), "") ?: ""
-                            }
-                            Text(
-                                text = messagePreview,
-                                fontSize = 12.sp,
-                                color = TextSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+                val previewText: String
+                val previewColor: Color
+                val previewItalic: Boolean
+                when (state) {
+                    "composing" -> {
+                        previewText = "digitando..."; previewColor = OnlineGreen; previewItalic = true
                     }
+                    "available" -> {
+                        previewText = "online"; previewColor = OnlineGreen; previewItalic = true
+                    }
+                    else -> {
+                        val lastMsg = conversation.lastMessage
+                        previewText = when (lastMsg?.type) {
+                            "4" -> "📷 Imagem"
+                            "5", "2" -> "🎤 Áudio"
+                            "1" -> "🎥 Vídeo"
+                            "3" -> "📄 Documento"
+                            else -> lastMsg?.message?.replace(Regex("<[^>]*>"), "")?.trim().orEmpty()
+                        }.ifBlank { "Sem mensagens" }
+                        previewColor = c.textSecondary; previewItalic = false
+                    }
+                }
+                Text(
+                    text = previewText,
+                    fontSize = 12.sp,
+                    color = previewColor,
+                    fontStyle = if (previewItalic) FontStyle.Italic else FontStyle.Normal,
+                    fontWeight = if (previewItalic) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
-                    // Time
-                    conversation.lastMessage?.createdAtRaw?.let { rawDate ->
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                conversation.lastMessage?.createdAtRaw?.let {
+                    Text(
+                        text = relativeTime(it),
+                        fontSize = 11.sp,
+                        color = c.textSecondary
+                    )
+                }
+                if (conversation.unreadMessages > 0) {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(VipDeskGreen)
+                            .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
+                            .padding(horizontal = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            text = formatRelativeTime(rawDate),
-                            fontSize = 11.sp,
-                            color = TextSecondary,
-                            fontStyle = FontStyle.Italic
+                            text = conversation.unreadMessages.toString(),
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -505,58 +383,9 @@ private fun ConversationCardItem(
 }
 
 @Composable
-private fun SourceIcon(source: String?) {
-    val icon = when (source) {
-        "whatsapp" -> Icons.Default.Forum
-        "email" -> Icons.Default.Email
-        "monitcall", "phone" -> Icons.Default.Phone
-        "webchat" -> Icons.Default.Language
-        "campaing" -> Icons.Default.Campaign
-        else -> Icons.Default.Forum
-    }
-    val tint = when (source) {
-        "whatsapp" -> WhatsAppGreen
-        "email" -> EmailBlue
-        "monitcall", "phone" -> PhoneOrange
-        "webchat" -> WebChatGray
-        else -> TextSecondary
-    }
-    Icon(
-        imageVector = icon,
-        contentDescription = source,
-        modifier = Modifier.size(16.dp),
-        tint = tint
-    )
-}
-
-private fun getInitials(fullName: String): String {
-    return fullName.split(" ")
-        .take(2)
-        .mapNotNull { it.firstOrNull()?.uppercaseChar()?.toString() }
-        .joinToString("")
-}
-
-private fun formatRelativeTime(dateStr: String): String {
-    return try {
-        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale("pt", "BR"))
-        val date = sdf.parse(dateStr) ?: return dateStr
-        val now = System.currentTimeMillis()
-        val diff = now - date.time
-        val minutes = diff / (1000 * 60)
-        val hours = minutes / 60
-        val days = hours / 24
-
-        when {
-            minutes < 1 -> "agora"
-            minutes < 60 -> "${minutes}min"
-            hours < 24 -> "${hours}h"
-            days < 7 -> "${days}d"
-            else -> {
-                val fmt = java.text.SimpleDateFormat("dd/MM", java.util.Locale("pt", "BR"))
-                fmt.format(date)
-            }
-        }
-    } catch (_: Exception) {
-        dateStr
-    }
+private fun CenterBox(content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) { content() }
 }

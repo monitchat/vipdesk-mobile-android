@@ -212,3 +212,123 @@ data class ChannelCounts(
     val webchat: Int = 0,
     val monitcall: Int = 0
 )
+
+// ============ MOBILE (endpoints /mobile/*) ============
+
+data class MobileDashboardEnvelope(val data: MobileDashboard = MobileDashboard())
+
+data class MobileDashboard(
+    @SerializedName("tickets_open") val ticketsOpen: StatMetric = StatMetric(),
+    val sla: SlaMetric = SlaMetric(),
+    @SerializedName("avg_response") val avgResponse: AvgResponseMetric = AvgResponseMetric(),
+    @SerializedName("agents_online") val agentsOnline: AgentsMetric = AgentsMetric(),
+    @SerializedName("recent_tickets") val recentTickets: List<RecentTicket> = emptyList()
+)
+
+data class StatMetric(
+    val value: Int = 0,
+    @SerializedName("delta_pct") val deltaPct: Int = 0,
+    @SerializedName("delta_label") val deltaLabel: String? = null
+)
+
+data class SlaMetric(
+    val value: Int = 0,
+    val unit: String = "%",
+    val target: Int = 90,
+    val within: Boolean = true,
+    val status: String = ""
+)
+
+data class AvgResponseMetric(
+    val seconds: Int? = null,
+    val label: String = "—",
+    @SerializedName("delta_label") val deltaLabel: String? = null,
+    val improved: Boolean? = null
+)
+
+data class AgentsMetric(
+    val value: Int = 0,
+    val status: String = ""
+)
+
+data class RecentTicket(
+    val id: Int,
+    @SerializedName("ticket_number") val ticketNumber: String? = null,
+    val title: String? = null,
+    val priority: String? = null,
+    val status: String? = null,
+    @SerializedName("contact_name") val contactName: String = "Contato",
+    @SerializedName("contact_avatar") val contactAvatar: String? = null,
+    @SerializedName("owner_name") val ownerName: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null,
+    @SerializedName("updated_at") val updatedAt: String? = null
+)
+
+data class MobileNotificationsEnvelope(
+    val data: List<MobileNotification> = emptyList(),
+    @SerializedName("unread_count") val unreadCount: Int = 0
+)
+
+data class MobileNotification(
+    val id: Int,
+    val message: String = "",
+    val type: Int = 0,
+    val kind: String = "general",
+    val read: Boolean = false,
+    @SerializedName("created_at") val createdAt: String? = null
+)
+
+data class MobileTicketEnvelope(val data: MobileTicket? = null)
+
+data class MobileTicket(
+    val id: Int,
+    @SerializedName("ticket_number") val ticketNumber: String? = null,
+    val title: String? = null,
+    val status: String? = null,
+    @SerializedName("status_id") val statusId: Int? = null,
+    @SerializedName("is_open") val isOpen: Boolean = true,
+    val priority: String? = null,
+    val sla: TicketSla? = null,
+    val channel: String? = null,
+    val department: String? = null,
+    val responsible: PersonRef? = null,
+    val contact: PersonRef? = null,
+    @SerializedName("created_at") val createdAt: String? = null,
+    @SerializedName("closed_at") val closedAt: String? = null,
+    val timeline: List<TimelineEvent> = emptyList()
+)
+
+data class TicketSla(
+    val name: String? = null,
+    val within: Boolean = true,
+    val label: String = ""
+)
+
+data class PersonRef(
+    val id: Int? = null,
+    val name: String = "",
+    val avatar: String? = null
+)
+
+data class TimelineEvent(
+    val type: String = "log",
+    val message: String = "",
+    val user: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null
+)
+
+data class MobileTicketsEnvelope(val data: List<TicketListItem> = emptyList())
+
+data class TicketListItem(
+    val id: Int,
+    @SerializedName("ticket_number") val ticketNumber: String? = null,
+    val title: String? = null,
+    val priority: String? = null,
+    val status: String? = null,
+    @SerializedName("is_open") val isOpen: Boolean = true,
+    @SerializedName("contact_name") val contactName: String = "Contato",
+    @SerializedName("contact_avatar") val contactAvatar: String? = null,
+    @SerializedName("owner_name") val ownerName: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null,
+    @SerializedName("updated_at") val updatedAt: String? = null
+)

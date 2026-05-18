@@ -5,19 +5,19 @@
     <option name="linkedExternalProjectsSettings">
       <GradleProjectSettings>
         <option name="testRunner" value="CHOOSE_PER_TEST" />
+        <option name="externalProjectPath" value="$PROJECT_DIR$/../../../DATA/projects/vipdesk-mobile" />
+        <option name="gradleJvm" value="jbr-21" />
+      </GradleProjectSettings>
+      <GradleProjectSettings>
+        <option name="testRunner" value="CHOOSE_PER_TEST" />
         <option name="externalProjectPath" value="$PROJECT_DIR$" />
         <option name="gradleJvm" value="#GRADLE_LOCAL_JAVA_HOME" />
         <option name="modules">
           <set>
-            <option value="/run/media/luiz-ricardo/DATA/projects/vipdesk-mobile" />
-            <option value="/run/media/luiz-ricardo/DATA/projects/vipdesk-mobile/app" />
+            <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/app" />
           </set>
         </option>
-      </GradleProjectSettings>
-      <GradleProjectSettings>
-        <option name="testRunner" value="CHOOSE_PER_TEST" />
-        <option name="externalProjectPath" value="/run/media/luiz-ricardo/DATA/projects/vipdesk-mobile" />
-        <option name="gradleJvm" value="jbr-21" />
       </GradleProjectSettings>
     </option>
   </component>

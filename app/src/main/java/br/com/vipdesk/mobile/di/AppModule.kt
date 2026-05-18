@@ -13,6 +13,7 @@ import br.com.vipdesk.mobile.data.model.Client
 import br.com.vipdesk.mobile.data.model.User
 import br.com.vipdesk.mobile.data.repository.AuthRepository
 import br.com.vipdesk.mobile.data.repository.ConversationRepository
+import br.com.vipdesk.mobile.data.repository.MobileRepository
 import br.com.vipdesk.mobile.data.socket.SocketService
 import com.google.gson.GsonBuilder
 import okhttp3.OkHttpClient
@@ -86,6 +87,10 @@ object AppContainer {
 
     val conversationRepository: ConversationRepository by lazy {
         ConversationRepository(apiService)
+    }
+
+    val mobileRepository: MobileRepository by lazy {
+        MobileRepository(apiService)
     }
 
     val socketService: SocketService by lazy {

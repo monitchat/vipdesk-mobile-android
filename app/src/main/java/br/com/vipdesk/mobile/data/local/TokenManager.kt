@@ -48,6 +48,14 @@ class TokenManager(private val context: Context) {
         return context.dataStore.data.first()[USER_ID_KEY]
     }
 
+    suspend fun getUserName(): String? {
+        return context.dataStore.data.first()[USER_NAME_KEY]
+    }
+
+    suspend fun getUserEmail(): String? {
+        return context.dataStore.data.first()[USER_EMAIL_KEY]
+    }
+
     fun getUserIdFlow(): Flow<Int?> {
         return context.dataStore.data.map { prefs -> prefs[USER_ID_KEY] }
     }
