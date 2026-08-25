@@ -31,20 +31,22 @@ import br.com.vipdesk.mobile.ui.theme.VipDeskPurple
 fun ticketStatusVisual(rawStatus: String?, isOpen: Boolean?): Pair<String, Color> {
     val s = rawStatus?.trim()?.lowercase().orEmpty()
     return when {
-        s.contains("resolv") || s.contains("conclu") -> "Resolvido" to Color(0xFF2FAC66)
-        s.contains("fechad") || s.contains("encerr") || isOpen == false -> "Fechado" to Color(0xFF8A8794)
-        s.contains("pendente") || s.contains("aguard") || s.contains("espera") -> "Pendente" to Color(0xFFF39C12)
-        s.contains("abert") || s.contains("novo") || isOpen == true -> "Aberto" to Color(0xFFF1A93B)
-        rawStatus.isNullOrBlank() -> "Aberto" to Color(0xFFF1A93B)
-        else -> (rawStatus) to Color(0xFF7E3E97)
+        s.contains("resolv") || s.contains("conclu") -> "Resolvido" to Color(0xFF6FBF9B)
+        s.contains("fechad") || s.contains("encerr") || isOpen == false -> "Fechado" to Color(0xFF9397AB)
+        s.contains("pendente") || s.contains("aguard") || s.contains("espera") -> "Pendente" to Color(0xFFD9A86A)
+        s.contains("novo") -> "Novo" to Color(0xFFB5ABFC)
+        s.contains("abert") || isOpen == true -> "Aberto" to Color(0xFF8AB0D9)
+        rawStatus.isNullOrBlank() -> "Aberto" to Color(0xFF8AB0D9)
+        else -> (rawStatus) to Color(0xFF9184D9)
     }
 }
 
 /** Prioridade (enum do backend: very_low..very_high) -> rótulo + cor. */
 fun ticketPriorityVisual(priority: String?): Pair<String, Color> = when (priority?.lowercase()) {
-    "very_low", "low", "baixa" -> "Baixa" to Color(0xFF2FAC66)
-    "high", "very_high", "alta" -> "Alta" to Color(0xFFE74C3C)
-    else -> "Média" to Color(0xFFF39C12)
+    "very_low", "low", "baixa" -> "Baixa" to Color(0xFF9397AB)
+    "very_high", "urgente" -> "Urgente" to Color(0xFFD98A8A)
+    "high", "alta" -> "Alta" to Color(0xFFD9A86A)
+    else -> "Normal" to Color(0xFF8AB0D9)
 }
 
 @Composable

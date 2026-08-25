@@ -42,7 +42,7 @@ data class ConversationDetailUiState(
 )
 
 class ConversationDetailViewModel(
-    private val conversationId: Int,
+    val conversationId: Int,
     private val conversationRepository: ConversationRepository,
     private val authRepository: AuthRepository,
     private val tokenManager: TokenManager,

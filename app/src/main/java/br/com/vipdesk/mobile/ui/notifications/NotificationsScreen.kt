@@ -2,220 +2,219 @@ package br.com.vipdesk.mobile.ui.notifications
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.ModeComment
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.outlined.AlternateEmail
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ConfirmationNumber
+import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.PersonAddAlt
+import androidx.compose.material.icons.outlined.TableChart
+import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import br.com.vipdesk.mobile.data.model.MobileNotification
 import br.com.vipdesk.mobile.ui.common.relativeTime
-import br.com.vipdesk.mobile.ui.theme.*
+import br.com.vipdesk.mobile.ui.components.VdDivider
+import br.com.vipdesk.mobile.ui.components.VdEmptyState
+import br.com.vipdesk.mobile.ui.components.VdSectionLabel
+import br.com.vipdesk.mobile.ui.theme.AppTheme
+import br.com.vipdesk.mobile.ui.theme.VdDanger
+import br.com.vipdesk.mobile.ui.theme.VdInfo
+import br.com.vipdesk.mobile.ui.theme.VdLilac
+import br.com.vipdesk.mobile.ui.theme.VdSuccess
+import br.com.vipdesk.mobile.ui.theme.VdWarning
+import br.com.vipdesk.mobile.ui.theme.WhatsAppGreen
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+private fun kindVisual(kind: String): Pair<ImageVector, Color> = when (kind.lowercase()) {
+    "message", "conversation" -> Icons.Outlined.Forum to WhatsAppGreen
+    "sla" -> Icons.Outlined.Timer to VdDanger
+    "ticket" -> Icons.Outlined.ConfirmationNumber to VdInfo
+    "lead", "contact" -> Icons.Outlined.PersonAddAlt to VdLilac
+    "mention" -> Icons.Outlined.AlternateEmail to Color(0xFFC47AB0)
+    "board", "task" -> Icons.Outlined.TableChart to VdWarning
+    "resolved" -> Icons.Outlined.CheckCircle to VdSuccess
+    else -> Icons.Outlined.Notifications to VdInfo
+}
+
+private fun groupLabel(createdAt: String?): String {
+    if (createdAt == null) return "Anteriores"
+    return try {
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("pt", "BR"))
+        val date = sdf.parse(createdAt) ?: return "Anteriores"
+        val now = Calendar.getInstance()
+        val then = Calendar.getInstance().apply { time = date }
+        val minutes = (now.timeInMillis - then.timeInMillis) / 60000
+        when {
+            minutes < 15 -> "Agora"
+            now.get(Calendar.DAY_OF_YEAR) == then.get(Calendar.DAY_OF_YEAR) &&
+                now.get(Calendar.YEAR) == then.get(Calendar.YEAR) -> "Hoje"
+            now.timeInMillis - then.timeInMillis < 48 * 3600_000L -> "Ontem"
+            else -> "Anteriores"
+        }
+    } catch (_: Exception) {
+        "Anteriores"
+    }
+}
+
 @Composable
 fun NotificationsScreen(
     onBack: () -> Unit,
     viewModel: NotificationsViewModel = viewModel(factory = NotificationsViewModel.Factory)
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val c = AppTheme.colors
 
-    Scaffold(
-        containerColor = c.background,
-        topBar = {
-            TopAppBar(
-                title = { Text("Notificações", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar")
-                    }
-                },
-                actions = {
-                    if (uiState.unreadCount > 0) {
-                        TextButton(onClick = { viewModel.markAllRead() }) {
-                            Icon(
-                                Icons.Default.DoneAll,
-                                null,
-                                modifier = Modifier.size(16.dp),
-                                tint = VipDeskPurple
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Marcar todas", fontSize = 12.sp, color = VipDeskPurple)
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = c.surface,
-                    titleContentColor = c.textPrimary,
-                    navigationIconContentColor = c.textPrimary
-                )
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            // Tabs
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                FilterPill(
-                    text = "Todas",
-                    selected = !uiState.onlyUnread,
-                    onClick = { viewModel.setFilter(false) },
-                    modifier = Modifier.weight(1f)
-                )
-                FilterPill(
-                    text = if (uiState.unreadCount > 0) "Não lidas · ${uiState.unreadCount}" else "Não lidas",
-                    selected = uiState.onlyUnread,
-                    onClick = { viewModel.setFilter(true) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            when {
-                uiState.isLoading && uiState.items.isEmpty() -> {
-                    Box(Modifier.fillMaxSize(), Alignment.Center) {
-                        CircularProgressIndicator(color = VipDeskPurple)
-                    }
-                }
-                uiState.items.isEmpty() -> {
-                    Box(Modifier.fillMaxSize(), Alignment.Center) {
-                        Text(
-                            if (uiState.error != null) uiState.error!!
-                            else "Nenhuma notificação",
-                            color = c.textSecondary,
-                            fontSize = 13.sp
-                        )
-                    }
-                }
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(uiState.items, key = { it.id }) { n ->
-                            NotificationRow(n) { viewModel.markRead(n.id) }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FilterPill(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val c = AppTheme.colors
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) VipDeskPurple else c.surface)
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            fontSize = 13.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) Color.White else c.textSecondary
-        )
-    }
-}
-
-private fun kindVisual(kind: String): Pair<ImageVector, Color> = when (kind) {
-    "message" -> Icons.AutoMirrored.Filled.Chat to WhatsAppGreen
-    "assignment" -> Icons.Default.SwapHoriz to VipDeskPurple
-    "sla" -> Icons.Default.Schedule to VipDeskRed
-    "comment" -> Icons.Default.ModeComment to VipDeskOrange
-    else -> Icons.Default.Notifications to VipDeskBlue
-}
-
-@Composable
-private fun NotificationRow(n: MobileNotification, onClick: () -> Unit) {
-    val c = AppTheme.colors
-    val (icon, color) = kindVisual(n.kind)
-    Surface(
+    Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
-        color = if (!n.read && !c.isDark) VipDeskPurpleContainer.copy(alpha = 0.35f) else c.surface,
-        shadowElevation = if (c.isDark) 0.dp else 2.dp
+            .fillMaxSize()
+            .background(c.background)
+            .statusBarsPadding()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(start = 4.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = if (c.isDark) 0.24f else 0.14f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, null, tint = color, modifier = Modifier.size(18.dp))
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar", tint = c.textPrimary)
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "Notificações",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = c.textPrimary,
+                modifier = Modifier.weight(1f)
+            )
+            if (state.unreadCount > 0) {
                 Text(
-                    text = n.message,
-                    fontSize = 13.sp,
-                    fontWeight = if (n.read) FontWeight.Normal else FontWeight.SemiBold,
-                    color = c.textPrimary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                n.createdAt?.let {
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Text(text = relativeTime(it), fontSize = 11.sp, color = c.textSecondary)
-                }
-            }
-            if (!n.read) {
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(
+                    "Marcar tudo como lido",
+                    fontSize = 12.5.sp,
+                    color = c.accent,
                     modifier = Modifier
-                        .size(9.dp)
-                        .clip(CircleShape)
-                        .background(VipDeskPurple)
+                        .clickable { viewModel.markAllRead() }
+                        .padding(4.dp)
                 )
             }
         }
+
+        when {
+            state.isLoading && state.items.isEmpty() -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = c.accent)
+                }
+            }
+            state.items.isEmpty() -> {
+                VdEmptyState(
+                    icon = Icons.Outlined.CheckCircle,
+                    title = "Tudo em dia",
+                    subtitle = "Nenhuma notificação pendente.",
+                    iconTint = VdSuccess,
+                    iconBg = VdSuccess.copy(alpha = 0.12f)
+                )
+            }
+            else -> {
+                val groups = state.items.groupBy { groupLabel(it.createdAt) }
+                val order = listOf("Agora", "Hoje", "Ontem", "Anteriores")
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        start = 16.dp, end = 16.dp, bottom = 40.dp
+                    )
+                ) {
+                    order.forEach { group ->
+                        val items = groups[group] ?: return@forEach
+                        item(key = "header-$group") {
+                            VdSectionLabel(group, Modifier.padding(top = 14.dp, bottom = 4.dp))
+                        }
+                        items.forEach { notif ->
+                            item(key = notif.id) {
+                                NotificationRow(notif) { viewModel.markRead(notif.id) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationRow(notif: MobileNotification, onClick: () -> Unit) {
+    val c = AppTheme.colors
+    val (icon, tint) = kindVisual(notif.kind)
+    Column(Modifier.clickable(onClick = onClick)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 11.dp),
+            horizontalArrangement = Arrangement.spacedBy(11.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .background(c.chip, RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = tint, modifier = Modifier.size(16.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    notif.message,
+                    fontSize = 13.5.sp,
+                    lineHeight = 18.sp,
+                    color = c.textPrimary
+                )
+                notif.createdAt?.let {
+                    Text(
+                        relativeTime(it),
+                        fontSize = 11.sp,
+                        color = c.textSecondary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+            }
+            if (!notif.read) {
+                Box(
+                    Modifier
+                        .padding(top = 6.dp)
+                        .size(8.dp)
+                        .background(c.accent, CircleShape)
+                )
+            }
+        }
+        VdDivider()
     }
 }

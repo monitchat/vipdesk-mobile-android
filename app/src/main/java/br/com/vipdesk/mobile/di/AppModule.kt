@@ -13,6 +13,7 @@ import br.com.vipdesk.mobile.data.model.Client
 import br.com.vipdesk.mobile.data.model.User
 import br.com.vipdesk.mobile.data.repository.AuthRepository
 import br.com.vipdesk.mobile.data.repository.ConversationRepository
+import br.com.vipdesk.mobile.data.repository.CrmRepository
 import br.com.vipdesk.mobile.data.repository.MobileRepository
 import br.com.vipdesk.mobile.data.socket.SocketService
 import com.google.gson.GsonBuilder
@@ -91,6 +92,10 @@ object AppContainer {
 
     val mobileRepository: MobileRepository by lazy {
         MobileRepository(apiService)
+    }
+
+    val crmRepository: CrmRepository by lazy {
+        CrmRepository(apiService)
     }
 
     val socketService: SocketService by lazy {

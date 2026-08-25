@@ -4,44 +4,43 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 /**
- * Design tokens for the VipDesk mobile "soft UI" style:
- * light lavender background, rounded pill inputs, gradient stat cards,
- * circular accents — all built on the VipDesk purple identity (#7E3E97).
+ * Tokens legados de marca, reafinados para a paleta Nocturne. Código novo
+ * deve usar AppTheme.colors; estes seguem apenas para compatibilidade.
  */
 
-// Page / surface neutrals
-val AppBackground = Color(0xFFF4F4FB)
-val AppSurface = Color(0xFFFFFFFF)
-val SoftShadow = Color(0x1A5C2D70)
-val FieldBackground = Color(0xFFF6F4FA)
-val FieldBorder = Color(0xFFE6E1EE)
-val IconMuted = Color(0xFF9A93A8)
+// Neutros de página/superfície (tema escuro padrão)
+val AppBackground = Color(0xFF161826)
+val AppSurface = Color(0xFF232532)
+val SoftShadow = Color(0x40000000)
+val FieldBackground = Color(0xFF232532)
+val FieldBorder = Color(0x29E9E9ED)
+val IconMuted = Color(0xFF9397AB)
 
-// Status dots (conversation presence)
-val OnlineGreen = Color(0xFF2FAC66)
-val OfflineRed = Color(0xFFE74C3C)
-val AwayGray = Color(0xFFBDBDBD)
+// Pontos de presença
+val OnlineGreen = Color(0xFF6FBF9B)
+val OfflineRed = Color(0xFFD98A8A)
+val AwayGray = Color(0xFF9397AB)
 
-// Brand gradients (mockup uses a 2-color split: brand + secondary)
+// Gradientes de marca (blurple Nocturne)
 val PurpleGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFF7E3E97), Color(0xFF5C2D70))
+    colors = listOf(Color(0xFF5D5294), Color(0xFF423A6A))
 )
 val PurpleGradientLight = Brush.linearGradient(
-    colors = listOf(Color(0xFF9B4FB8), Color(0xFF7E3E97))
+    colors = listOf(Color(0xFF9184D9), Color(0xFF5D5294))
 )
 val GreenGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFF34C77B), Color(0xFF1F8A50))
+    colors = listOf(Color(0xFF6FBF9B), Color(0xFF3F6B5A))
 )
 val TealGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFF3FB9C9), Color(0xFF2E8FA0))
+    colors = listOf(Color(0xFF7FB8B0), Color(0xFF3F5A6B))
 )
 
-// Login backdrop (very light, like the mockup's near-white screen)
+// Fundo do login (radial escuro do design fica no próprio LoginScreen)
 val LoginBackdrop = Brush.verticalGradient(
-    colors = listOf(Color(0xFFFFFFFF), Color(0xFFF1ECF7))
+    colors = listOf(Color(0xFF1D2036), Color(0xFF161826))
 )
 
-// Outgoing chat bubble (own messages) — brand gradient
+// Balão de mensagem enviada
 val OwnBubbleGradient = Brush.linearGradient(
-    colors = listOf(Color(0xFF8E4AA8), Color(0xFF6E3486))
+    colors = listOf(Color(0xFF2B2741), Color(0xFF2B2741))
 )

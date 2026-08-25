@@ -317,6 +317,110 @@ data class TimelineEvent(
     @SerializedName("created_at") val createdAt: String? = null
 )
 
+// ============ CRM / CRIAÇÃO ============
+
+data class ApiContact(
+    val id: Int,
+    val name: String = "",
+    val email: String? = null,
+    @SerializedName("phone_number") val phoneNumber: String? = null,
+    val city: String? = null
+)
+
+data class ContactListResponse(
+    @SerializedName("total_records") val totalRecords: Int = 0,
+    val data: List<ApiContact> = emptyList()
+)
+
+data class CreateContactRequest(
+    val name: String,
+    @SerializedName("phone_number") val phoneNumber: String? = null,
+    val email: String? = null
+)
+
+data class CreateContactResponse(
+    val data: ApiContact? = null,
+    val message: String? = null
+)
+
+data class CreateTicketRequest(
+    @SerializedName("contact_id") val contactId: Int,
+    val title: String,
+    val description: String? = null,
+    val priority: String? = null,
+    @SerializedName("department_id") val departmentId: Int? = null,
+    val source: String = "whatsapp"
+)
+
+data class CreateTicketResponse(
+    val ticket: Ticket? = null,
+    val message: String? = null
+)
+
+// ============ CRM / NEGÓCIOS (deals) ============
+
+data class DealStage(
+    val id: Int,
+    val name: String = "",
+    @SerializedName("is_won") val isWon: Boolean = false,
+    @SerializedName("is_lost") val isLost: Boolean = false,
+    val color: String? = null
+)
+
+data class DealPipeline(
+    val id: Int,
+    val name: String = "",
+    @SerializedName("is_default") val isDefault: Boolean = false,
+    val stages: List<DealStage> = emptyList()
+)
+
+data class PipelineListResponse(val data: List<DealPipeline> = emptyList())
+
+data class ApiDeal(
+    val id: Int,
+    val title: String = "",
+    val value: Double? = null,
+    val currency: String? = "BRL",
+    val status: String? = "open",
+    val stage: DealStage? = null,
+    val pipeline: DealPipeline? = null,
+    val contact: ApiContact? = null,
+    val owner: User? = null,
+    @SerializedName("expected_close_date") val expectedCloseDate: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null
+)
+
+data class DealListResponse(
+    val data: List<ApiDeal> = emptyList(),
+    @SerializedName("total_records") val totalRecords: Int = 0
+)
+
+data class CreateDealRequest(
+    val title: String,
+    val value: Double? = null,
+    @SerializedName("contact_id") val contactId: Int? = null,
+    @SerializedName("pipeline_id") val pipelineId: Int? = null,
+    @SerializedName("stage_id") val stageId: Int? = null,
+    val description: String? = null,
+    val source: String? = "mobile"
+)
+
+data class DealEnvelope(
+    val data: ApiDeal? = null,
+    val message: String? = null
+)
+
+data class MoveDealStageRequest(@SerializedName("stage_id") val stageId: Int)
+
+data class CloseDealRequest(
+    val result: String, // won | lost
+    @SerializedName("lost_reason_id") val lostReasonId: Int? = null
+)
+
+data class LossReason(val id: Int, val name: String = "")
+
+data class LossReasonListResponse(val data: List<LossReason> = emptyList())
+
 data class MobileTicketsEnvelope(val data: List<TicketListItem> = emptyList())
 
 data class TicketListItem(

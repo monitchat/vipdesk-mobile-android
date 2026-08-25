@@ -24,6 +24,57 @@ interface ApiService {
     @GET("user")
     suspend fun getUsers(): Response<ApiResponse<List<User>>>
 
+    // ============ CONTACTS (CRM) ============
+
+    @GET("contact")
+    suspend fun getContacts(
+        @Query("search") search: String? = null,
+        @Query("take") take: Int = 25,
+        @Query("skip") skip: Int = 0
+    ): Response<ContactListResponse>
+
+    @POST("contact")
+    suspend fun createContact(@Body body: CreateContactRequest): Response<CreateContactResponse>
+
+    // Conversa existente do contato (para abrir chat a partir do CRM).
+    // Resource do Laravel: pode vir embrulhado em "data" ou não.
+    @GET("contact/{id}/conversation")
+    suspend fun getContactConversation(@Path("id") contactId: Int): Response<com.google.gson.JsonObject>
+
+    @POST("ticket")
+    suspend fun createTicket(@Body body: CreateTicketRequest): Response<CreateTicketResponse>
+
+    // ============ CRM / NEGÓCIOS (deals) ============
+
+    @GET("deal")
+    suspend fun getDeals(
+        @Query("search") search: String? = null,
+        @Query("status") status: String? = null,
+        @Query("take") take: Int = 30,
+        @Query("skip") skip: Int = 0
+    ): Response<DealListResponse>
+
+    @POST("deal")
+    suspend fun createDeal(@Body body: CreateDealRequest): Response<DealEnvelope>
+
+    @PUT("deal/{id}/move-stage")
+    suspend fun moveDealStage(
+        @Path("id") dealId: Int,
+        @Body body: MoveDealStageRequest
+    ): Response<DealEnvelope>
+
+    @PUT("deal/{id}/close")
+    suspend fun closeDeal(
+        @Path("id") dealId: Int,
+        @Body body: CloseDealRequest
+    ): Response<DealEnvelope>
+
+    @GET("pipeline")
+    suspend fun getPipelines(): Response<PipelineListResponse>
+
+    @GET("loss-reason")
+    suspend fun getLossReasons(): Response<LossReasonListResponse>
+
     @GET("user/{id}/info/")
     suspend fun getUserInfo(@Path("id") userId: Int): Response<User>
 

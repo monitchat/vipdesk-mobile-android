@@ -1,29 +1,42 @@
 package br.com.vipdesk.mobile.ui.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.TrendingDown
-import androidx.compose.material.icons.filled.TrendingUp
-import androidx.compose.material.icons.filled.ConfirmationNumber
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.ConfirmationNumber
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.Verified
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,350 +44,275 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import br.com.vipdesk.mobile.data.model.RecentTicket
 import br.com.vipdesk.mobile.ui.common.initialsOf
 import br.com.vipdesk.mobile.ui.common.relativeTime
-import br.com.vipdesk.mobile.ui.components.SectionCard
-import br.com.vipdesk.mobile.ui.components.StatusBadge
+import br.com.vipdesk.mobile.ui.components.VdAvatar
+import br.com.vipdesk.mobile.ui.components.VdCard
+import br.com.vipdesk.mobile.ui.components.VdIconButton
+import br.com.vipdesk.mobile.ui.components.VdKpiCard
+import br.com.vipdesk.mobile.ui.components.VdSectionLabel
+import br.com.vipdesk.mobile.ui.components.VdTag
 import br.com.vipdesk.mobile.ui.components.ticketPriorityVisual
-import br.com.vipdesk.mobile.ui.theme.*
+import br.com.vipdesk.mobile.ui.components.ticketStatusVisual
+import br.com.vipdesk.mobile.ui.theme.AppTheme
+import br.com.vipdesk.mobile.ui.theme.VdDanger
+import br.com.vipdesk.mobile.ui.theme.VdSuccess
+import br.com.vipdesk.mobile.ui.theme.VdWarning
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun DashboardScreen(
     onTicketClick: (Int) -> Unit,
     onSeeAllTickets: () -> Unit,
     onNotificationsClick: () -> Unit,
+    onSearchClick: () -> Unit = {},
+    onSettingsClick: () -> Unit = {},
+    onOpenInbox: () -> Unit = {},
     viewModel: DashboardViewModel = viewModel(factory = DashboardViewModel.Factory)
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val d = uiState.dashboard
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val c = AppTheme.colors
+    val dash = state.dashboard
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(c.background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-            .padding(top = 16.dp, bottom = 24.dp)
+            .statusBarsPadding()
     ) {
-        // Greeting header + bell + avatar
+        // Cabeçalho
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Box(Modifier.clip(CircleShape).clickable(onClick = onSettingsClick)) {
+                VdAvatar(name = state.userName.ifBlank { "A" }, size = 40.dp, fontSize = 15)
+            }
+            Column(Modifier.weight(1f)) {
                 Text(
-                    text = "Olá, ${uiState.userName}! 👋",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = c.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    "${greeting()}, ${state.userName.ifBlank { "agente" }}",
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = (-0.2).sp,
+                    color = c.textPrimary
                 )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "Aqui está o resumo do seu dia",
-                    fontSize = 13.sp,
-                    color = c.textSecondary
+                Text(todayLabel(), fontSize = 12.sp, color = c.textSecondary)
+            }
+            VdIconButton(Icons.Outlined.Search, onClick = onSearchClick)
+            VdIconButton(
+                Icons.Outlined.Notifications,
+                onClick = onNotificationsClick,
+                showDot = state.unreadNotifications > 0
+            )
+        }
+
+        if (state.isLoading && dash.recentTickets.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = c.accent)
+            }
+            return@Column
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Spacer(Modifier.height(0.dp))
+
+            // Alerta de SLA
+            if (!dash.sla.within) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(VdDanger.copy(alpha = 0.10f))
+                        .border(1.dp, VdDanger.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                        .clickable(onClick = onSeeAllTickets)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(Icons.Default.Warning, null, tint = VdDanger, modifier = Modifier.size(18.dp))
+                    Text(
+                        buildString {
+                            append("SLA em risco")
+                            if (dash.sla.status.isNotBlank()) append(" · ${dash.sla.status}")
+                        },
+                        fontSize = 13.sp,
+                        color = c.textPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight, null,
+                        tint = c.textSecondary, modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // KPIs (2 colunas)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                VdKpiCard(
+                    number = "${dash.ticketsOpen.value}",
+                    label = "Tickets abertos",
+                    icon = Icons.Outlined.ConfirmationNumber,
+                    delta = dash.ticketsOpen.deltaLabel,
+                    deltaColor = if (dash.ticketsOpen.deltaPct <= 0) VdSuccess else VdWarning,
+                    modifier = Modifier.weight(1f),
+                    onClick = onSeeAllTickets
+                )
+                VdKpiCard(
+                    number = "${dash.sla.value}${dash.sla.unit}",
+                    label = "SLA cumprido",
+                    icon = Icons.Outlined.Verified,
+                    numberColor = if (dash.sla.within) c.textPrimary else VdDanger,
+                    modifier = Modifier.weight(1f),
+                    onClick = onSeeAllTickets
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                VdKpiCard(
+                    number = dash.avgResponse.label,
+                    label = "Tempo médio de resposta",
+                    icon = Icons.Outlined.Timer,
+                    delta = dash.avgResponse.deltaLabel,
+                    deltaColor = if (dash.avgResponse.improved == true) VdSuccess else VdWarning,
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenInbox
+                )
+                VdKpiCard(
+                    number = "${dash.agentsOnline.value}",
+                    label = "Agentes ativos",
+                    icon = Icons.Outlined.Groups,
+                    modifier = Modifier.weight(1f)
                 )
             }
 
-            Box {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(c.surface)
-                        .clickable { onNotificationsClick() },
-                    contentAlignment = Alignment.Center
+            // Atividade recente (tickets)
+            VdCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        Icons.Default.Notifications,
-                        contentDescription = "Notificações",
-                        tint = VipDeskPurple,
-                        modifier = Modifier.size(20.dp)
+                    VdSectionLabel("Atividade recente")
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        "ver tudo",
+                        fontSize = 12.sp,
+                        color = c.accent,
+                        modifier = Modifier.clickable(onClick = onSeeAllTickets)
                     )
                 }
-                if (uiState.unreadNotifications > 0) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .clip(CircleShape)
-                            .background(VipDeskRed)
-                            .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
-                            .padding(horizontal = 4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (uiState.unreadNotifications > 9) "9+" else uiState.unreadNotifications.toString(),
-                            color = Color.White,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold
+                if (dash.recentTickets.isEmpty()) {
+                    Text(
+                        "Nenhum ticket recente.",
+                        fontSize = 13.sp,
+                        color = c.textSecondary,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                } else {
+                    dash.recentTickets.forEachIndexed { i, t ->
+                        RecentTicketRow(
+                            ticket = t,
+                            showDivider = i < dash.recentTickets.lastIndex,
+                            onClick = { onTicketClick(t.id) }
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            state.error?.let {
+                Text(it, fontSize = 12.sp, color = VdDanger)
+            }
 
+            Spacer(Modifier.height(56.dp))
+        }
+    }
+}
+
+@Composable
+private fun RecentTicketRow(
+    ticket: RecentTicket,
+    showDivider: Boolean,
+    onClick: () -> Unit
+) {
+    val c = AppTheme.colors
+    val (stLabel, stColor) = ticketStatusVisual(ticket.status, null)
+    val (_, priColor) = ticketPriorityVisual(ticket.priority)
+    Column(Modifier.clickable(onClick = onClick)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 9.dp),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(11.dp)
+        ) {
             Box(
                 modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(PurpleGradient),
+                    .size(30.dp)
+                    .background(c.chip, RoundedCornerShape(9.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = initialsOf(uiState.userName),
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
+                    initialsOf(ticket.contactName),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.textSecondary
                 )
             }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Stat cards 2x2
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            StatCard(
-                modifier = Modifier.weight(1f),
-                label = "Tickets abertos",
-                value = d.ticketsOpen.value.toString(),
-                icon = Icons.Default.ConfirmationNumber,
-                accent = VipDeskPurple,
-                trend = d.ticketsOpen.deltaLabel,
-                trendPositive = d.ticketsOpen.deltaPct >= 0
-            )
-            StatCard(
-                modifier = Modifier.weight(1f),
-                label = "SLA",
-                value = "${d.sla.value}${d.sla.unit}",
-                icon = Icons.Default.CheckCircle,
-                accent = if (d.sla.within) VipDeskGreen else VipDeskRed,
-                trend = d.sla.status,
-                trendPositive = d.sla.within
-            )
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            StatCard(
-                modifier = Modifier.weight(1f),
-                label = "Tempo médio de resposta",
-                value = d.avgResponse.label,
-                icon = Icons.Default.Schedule,
-                accent = VipDeskOrange,
-                trend = d.avgResponse.deltaLabel,
-                trendPositive = d.avgResponse.improved ?: true
-            )
-            StatCard(
-                modifier = Modifier.weight(1f),
-                label = "Agentes online",
-                value = d.agentsOnline.value.toString(),
-                icon = Icons.Default.People,
-                accent = VipDeskGreen,
-                trend = d.agentsOnline.status,
-                trendPositive = d.agentsOnline.value > 0
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Recent tickets
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Tickets recentes",
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                color = c.textPrimary,
-                modifier = Modifier.weight(1f)
-            )
-            if (uiState.isLoading || uiState.isRefreshing) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    color = VipDeskPurple,
-                    strokeWidth = 2.dp
-                )
-            } else {
+            Column(Modifier.weight(1f)) {
                 Text(
-                    text = "Ver todos",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = VipDeskPurple,
-                    modifier = Modifier.clickable { onSeeAllTickets() }
+                    ticket.title ?: "Ticket ${ticket.ticketNumber ?: "#${ticket.id}"}",
+                    fontSize = 13.5.sp,
+                    color = c.textPrimary,
+                    maxLines = 2
                 )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        SectionCard(
-            modifier = Modifier.fillMaxWidth(),
-            padding = PaddingValues(vertical = 6.dp)
-        ) {
-            Column {
-                when {
-                    uiState.error != null && d.recentTickets.isEmpty() -> {
-                        EmptyHint(uiState.error ?: "Erro ao carregar")
-                    }
-                    d.recentTickets.isEmpty() && !uiState.isLoading -> {
-                        EmptyHint("Nenhum ticket aberto no momento")
-                    }
-                    else -> {
-                        d.recentTickets.forEachIndexed { index, t ->
-                            RecentTicketRow(t) { onTicketClick(t.id) }
-                            if (index < d.recentTickets.lastIndex) {
-                                HorizontalDivider(
-                                    color = c.divider,
-                                    modifier = Modifier.padding(start = 70.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatCard(
-    modifier: Modifier = Modifier,
-    label: String,
-    value: String,
-    icon: ImageVector,
-    accent: Color,
-    trend: String?,
-    trendPositive: Boolean
-) {
-    val c = AppTheme.colors
-    SectionCard(modifier = modifier.height(124.dp), padding = PaddingValues(16.dp)) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(accent.copy(alpha = if (c.isDark) 0.24f else 0.12f)),
-                    contentAlignment = Alignment.Center
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(top = 3.dp)
                 ) {
-                    Icon(icon, null, tint = accent, modifier = Modifier.size(16.dp))
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = label,
-                    fontSize = 11.sp,
-                    color = c.textSecondary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 13.sp
-                )
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = value,
-                color = c.textPrimary,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
-            if (!trend.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(3.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        if (trendPositive) Icons.Default.TrendingUp
-                        else Icons.Default.TrendingDown,
-                        contentDescription = null,
-                        tint = if (trendPositive) VipDeskGreen else VipDeskRed,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Box(Modifier.size(6.dp).background(priColor, CircleShape))
+                    VdTag(stLabel, color = stColor, background = stColor.copy(alpha = 0.15f))
                     Text(
-                        text = trend,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (trendPositive) VipDeskGreen else VipDeskRed,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        buildString {
+                            append(ticket.contactName)
+                            ticket.createdAt?.let { append(" · ${relativeTime(it)}") }
+                        },
+                        fontSize = 11.5.sp,
+                        color = c.textSecondary,
+                        maxLines = 1
                     )
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun RecentTicketRow(t: RecentTicket, onClick: () -> Unit) {
-    val c = AppTheme.colors
-    val (prioLabel, prioColor) = ticketPriorityVisual(t.priority)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(PurpleGradientLight),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = initialsOf(t.contactName),
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp
+        if (showDivider) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(c.divider)
             )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = t.contactName,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = c.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = t.title?.takeIf { it.isNotBlank() } ?: (t.ticketNumber ?: "Ticket"),
-                fontSize = 12.sp,
-                color = c.textSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(horizontalAlignment = Alignment.End) {
-            t.updatedAt?.let {
-                Text(text = relativeTime(it), fontSize = 11.sp, color = c.textSecondary)
-            }
-            Spacer(modifier = Modifier.height(5.dp))
-            StatusBadge(label = prioLabel, color = prioColor)
         }
     }
 }
 
-@Composable
-private fun EmptyHint(text: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(28.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text = text, color = AppTheme.colors.textSecondary, fontSize = 13.sp)
+private fun greeting(): String {
+    val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+    return when {
+        h < 12 -> "Bom dia"
+        h < 18 -> "Boa tarde"
+        else -> "Boa noite"
     }
+}
+
+private fun todayLabel(): String {
+    val fmt = SimpleDateFormat("EEEE, d 'de' MMMM", Locale("pt", "BR"))
+    return fmt.format(Date()).replaceFirstChar { it.uppercase() }
 }

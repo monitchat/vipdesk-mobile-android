@@ -65,14 +65,28 @@ fun relativeTime(dateStr: String): String {
 
 data class SourceVisual(val icon: ImageVector, val color: Color)
 
-fun sourceVisual(source: String?): SourceVisual = when (source) {
+fun sourceVisual(source: String?): SourceVisual = when (source?.lowercase()) {
     "whatsapp" -> SourceVisual(Icons.Default.Forum, WhatsAppGreen)
-    "facebook" -> SourceVisual(Icons.Default.Facebook, Color(0xFF1877F2))
-    "instagram" -> SourceVisual(Icons.Default.CameraAlt, Color(0xFFE4405F))
-    "telegram" -> SourceVisual(Icons.AutoMirrored.Filled.Send, Color(0xFF0088CC))
+    "facebook", "messenger" -> SourceVisual(Icons.Default.Facebook, Color(0xFF7A94C9))
+    "instagram" -> SourceVisual(Icons.Default.CameraAlt, Color(0xFFC47AB0))
+    "telegram" -> SourceVisual(Icons.AutoMirrored.Filled.Send, Color(0xFF7FB8B0))
     "email" -> SourceVisual(Icons.Default.Email, EmailBlue)
     "monitcall", "phone" -> SourceVisual(Icons.Default.Phone, PhoneOrange)
     "webchat" -> SourceVisual(Icons.Default.Language, WebChatGray)
+    "sms" -> SourceVisual(Icons.Default.Forum, Color(0xFF9C9FB3))
     "campaing" -> SourceVisual(Icons.Default.Campaign, TextSecondary)
     else -> SourceVisual(Icons.Default.Forum, TextSecondary)
+}
+
+/** Nome de exibição do canal (rótulos do design). */
+fun sourceLabel(source: String?): String = when (source?.lowercase()) {
+    "whatsapp" -> "WhatsApp"
+    "facebook", "messenger" -> "Messenger"
+    "instagram" -> "Instagram"
+    "telegram" -> "Telegram"
+    "email" -> "E-mail"
+    "monitcall", "phone" -> "Telefone"
+    "webchat" -> "Web Chat"
+    "sms" -> "SMS"
+    else -> "Chat"
 }

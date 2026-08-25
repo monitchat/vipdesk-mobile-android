@@ -1,48 +1,69 @@
 package br.com.vipdesk.mobile.ui.ticket
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.Forum
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.PersonAddAlt
+import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.vipdesk.mobile.data.model.TimelineEvent
-import br.com.vipdesk.mobile.ui.common.initialsOf
 import br.com.vipdesk.mobile.ui.common.relativeTime
-import br.com.vipdesk.mobile.ui.common.sourceVisual
-import br.com.vipdesk.mobile.ui.components.SectionCard
-import br.com.vipdesk.mobile.ui.components.StatusBadge
+import br.com.vipdesk.mobile.ui.common.sourceLabel
+import br.com.vipdesk.mobile.ui.components.VdAvatar
+import br.com.vipdesk.mobile.ui.components.VdCard
+import br.com.vipdesk.mobile.ui.components.VdDivider
+import br.com.vipdesk.mobile.ui.components.VdOutlineButton
+import br.com.vipdesk.mobile.ui.components.VdSectionLabel
+import br.com.vipdesk.mobile.ui.components.VdSheetRow
+import br.com.vipdesk.mobile.ui.components.VdToast
 import br.com.vipdesk.mobile.ui.components.ticketPriorityVisual
 import br.com.vipdesk.mobile.ui.components.ticketStatusVisual
-import br.com.vipdesk.mobile.ui.theme.*
-import kotlinx.coroutines.launch
+import br.com.vipdesk.mobile.ui.theme.AppTheme
+import br.com.vipdesk.mobile.ui.theme.VdDanger
+import br.com.vipdesk.mobile.ui.theme.VdSuccess
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,423 +74,368 @@ fun TicketDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val c = AppTheme.colors
-    val snackbarHostState = remember { SnackbarHostState() }
     val t = uiState.ticket
     var showResolveConfirm by remember { mutableStateOf(false) }
+    var showActions by remember { mutableStateOf(false) }
+    var toast by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
-            snackbarHostState.showSnackbar(it)
+            toast = it
             viewModel.clearMessage()
+        }
+    }
+    LaunchedEffect(toast) {
+        if (toast != null) {
+            delay(1900)
+            toast = null
         }
     }
 
     if (showResolveConfirm) {
         AlertDialog(
             onDismissRequest = { showResolveConfirm = false },
-            icon = { Icon(Icons.Default.CheckCircle, null, tint = VipDeskGreen) },
-            title = { Text("Resolver ticket") },
-            text = { Text("Deseja marcar este ticket como resolvido?") },
+            containerColor = c.surface,
+            icon = { Icon(Icons.Default.CheckCircle, null, tint = VdSuccess) },
+            title = { Text("Resolver ticket", color = c.textPrimary) },
+            text = { Text("Deseja marcar este ticket como resolvido?", color = c.textSecondary) },
             confirmButton = {
                 TextButton(onClick = {
                     showResolveConfirm = false
                     viewModel.resolve()
-                }) { Text("Resolver", color = VipDeskGreen, fontWeight = FontWeight.Bold) }
+                }) { Text("Resolver", color = VdSuccess, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                TextButton(onClick = { showResolveConfirm = false }) { Text("Cancelar") }
+                TextButton(onClick = { showResolveConfirm = false }) {
+                    Text("Cancelar", color = c.textSecondary)
+                }
             }
         )
     }
 
     if (uiState.showTransferDialog) {
-        AgentPickerDialog(
-            agents = uiState.agents,
-            onPick = { viewModel.transferTo(it.id) },
-            onDismiss = { viewModel.dismissTransferDialog() }
-        )
+        ModalBottomSheet(
+            onDismissRequest = { viewModel.dismissTransferDialog() },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = c.surface
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Text(
+                    "Transferir para…",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.textPrimary,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+                if (uiState.agents.isEmpty()) {
+                    Box(
+                        Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = c.accent, modifier = Modifier.size(22.dp))
+                    }
+                }
+                uiState.agents.forEach { agent ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.transferTo(agent.id) }
+                            .padding(horizontal = 4.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(11.dp)
+                    ) {
+                        VdAvatar(name = agent.name, size = 34.dp, fontSize = 12)
+                        Column {
+                            Text(
+                                agent.name,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = c.textPrimary
+                            )
+                            Text(agent.email, fontSize = 11.5.sp, color = c.textSecondary)
+                        }
+                    }
+                    VdDivider()
+                }
+                Spacer(Modifier.height(28.dp))
+            }
+        }
     }
 
-    Scaffold(
-        containerColor = c.background,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = { Text("Detalhes do Ticket", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar")
-                    }
-                },
-                actions = {
-                    if (uiState.isActing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp).padding(end = 8.dp),
-                            color = VipDeskPurple,
-                            strokeWidth = 2.dp
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = c.surface,
-                    titleContentColor = c.textPrimary,
-                    navigationIconContentColor = c.textPrimary,
-                    actionIconContentColor = c.textPrimary
+    Box(Modifier.fillMaxSize().background(c.background)) {
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+            // Cabeçalho
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, end = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar", tint = c.textPrimary)
+                }
+                Text(
+                    "Ticket ${t?.ticketNumber ?: ""}",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.textPrimary,
+                    modifier = Modifier.weight(1f)
                 )
-            )
-        }
-    ) { padding ->
-        when {
-            uiState.isLoading && t == null -> {
-                Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
-                    CircularProgressIndicator(color = VipDeskPurple)
-                }
-            }
-            t == null -> {
-                Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
-                    Text(uiState.error ?: "Ticket não encontrado", color = c.textSecondary)
-                }
-            }
-            else -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp, vertical = 16.dp)
-                ) {
-                    // Ticket card
-                    val (statusLabel, statusColor) = ticketStatusVisual(t.status, t.isOpen)
-                    SectionCard(modifier = Modifier.fillMaxWidth()) {
-                        Column {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("Ticket", fontSize = 12.sp, color = c.textSecondary)
-                                    Text(
-                                        text = "#${t.ticketNumber ?: t.id}",
-                                        fontSize = 22.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = c.textPrimary
-                                    )
-                                }
-                                StatusBadge(label = statusLabel, color = statusColor)
-                            }
-                            t.createdAt?.let {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    "Criado ${relativeTime(it)}",
-                                    fontSize = 12.sp,
-                                    color = c.textSecondary
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-                            HorizontalDivider(color = c.divider)
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            val (prioLabel, prioColor) = ticketPriorityVisual(t.priority)
-                            DetailRow(Icons.Default.Person, "Responsável") {
-                                Text(
-                                    t.responsible?.name ?: "Não atribuído",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = c.textPrimary
-                                )
-                            }
-                            DetailRow(Icons.Default.Flag, "Prioridade") {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(prioColor)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        prioLabel,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = c.textPrimary
-                                    )
-                                }
-                            }
-                            DetailRow(Icons.Default.Speed, "SLA") {
-                                Text(
-                                    t.sla?.label ?: "—",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (t.sla?.within != false) VipDeskGreen else VipDeskRed
-                                )
-                            }
-                            DetailRow(Icons.Default.Forum, "Canal") {
-                                val v = sourceVisual(t.channel)
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(v.icon, null, tint = v.color, modifier = Modifier.size(15.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        t.channel?.replaceFirstChar { it.uppercase() } ?: "—",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = c.textPrimary
-                                    )
-                                }
-                            }
-                            t.contact?.let { contact ->
-                                DetailRow(Icons.Default.Person, "Contato") {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            contact.name,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = VipDeskPurple
-                                        )
-                                        Icon(
-                                            Icons.Default.ChevronRight,
-                                            null,
-                                            tint = c.iconMuted,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // History / timeline
-                    Text(
-                        "Histórico",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = c.textPrimary
+                if (uiState.isActing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = c.accent,
+                        strokeWidth = 2.dp
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    SectionCard(modifier = Modifier.fillMaxWidth()) {
-                        Column {
-                            if (t.timeline.isEmpty()) {
-                                Text(
-                                    "Sem eventos registrados",
-                                    fontSize = 13.sp,
-                                    color = c.textSecondary
-                                )
-                            } else {
-                                t.timeline.forEachIndexed { i, ev ->
-                                    TimelineRow(ev, isLast = i == t.timeline.lastIndex)
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // Actions
+                    Spacer(Modifier.width(10.dp))
+                }
+                t?.let {
+                    val (stLabel, stColor) = ticketStatusVisual(it.status, it.isOpen)
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(stColor.copy(alpha = 0.15f))
+                            .clickable { showActions = true }
+                            .padding(horizontal = 11.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        OutlinedButton(
-                            onClick = { viewModel.assignToMe() },
-                            enabled = !uiState.isActing,
-                            modifier = Modifier.weight(1f).height(48.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = VipDeskPurple)
-                        ) {
-                            Icon(Icons.Default.PersonAdd, null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Atribuir", fontSize = 13.sp)
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.openTransferDialog() },
-                            enabled = !uiState.isActing,
-                            modifier = Modifier.weight(1f).height(48.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = VipDeskPurple)
-                        ) {
-                            Icon(Icons.Default.SwapHoriz, null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Transferir", fontSize = 13.sp)
-                        }
+                        Text(stLabel, fontSize = 12.sp, color = stColor)
                     }
+                }
+            }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Button(
-                        onClick = { showResolveConfirm = true },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = VipDeskGreen),
-                        enabled = t.isOpen && !uiState.isActing
-                    ) {
-                        Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
+            when {
+                uiState.isLoading && t == null -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = c.accent)
+                    }
+                }
+                t == null -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            if (t.isOpen) "Resolver ticket" else "Ticket resolvido",
-                            fontWeight = FontWeight.Bold
+                            uiState.error ?: "Ticket não encontrado",
+                            color = c.textSecondary,
+                            fontSize = 14.sp
                         )
                     }
-
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
+                else -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            t.title ?: "Sem título",
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 24.sp,
+                            color = c.textPrimary
+                        )
+
+                        // Alerta de SLA
+                        t.sla?.let { sla ->
+                            if (!sla.within) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(11.dp))
+                                        .background(VdDanger.copy(alpha = 0.10f))
+                                        .border(1.dp, VdDanger.copy(alpha = 0.35f), RoundedCornerShape(11.dp))
+                                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(9.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Timer, null,
+                                        tint = VdDanger, modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        sla.label.ifBlank { "SLA em risco" },
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = VdDanger
+                                    )
+                                }
+                            }
+                        }
+
+                        // Campos
+                        VdCard(padding = 0.dp) {
+                            Column(Modifier.padding(horizontal = 14.dp)) {
+                                val (priLabel, priColor) = ticketPriorityVisual(t.priority)
+                                FieldRow("Cliente", t.contact?.name ?: "—", c.textPrimary) {
+                                    t.contact?.id?.let(onOpenContact)
+                                }
+                                FieldRow("Agente", t.responsible?.name ?: "Não atribuído", c.textPrimary)
+                                FieldRow("Departamento", t.department ?: "—", c.textPrimary)
+                                FieldRow("Prioridade", priLabel, priColor)
+                                FieldRow("Canal", sourceLabel(t.channel), c.textPrimary)
+                                FieldRow(
+                                    "Criado",
+                                    t.createdAt?.let { relativeTime(it) } ?: "—",
+                                    c.textPrimary,
+                                    last = true
+                                )
+                            }
+                        }
+
+                        // Atividade
+                        if (t.timeline.isNotEmpty()) {
+                            VdCard {
+                                VdSectionLabel("Atividade", Modifier.padding(bottom = 4.dp))
+                                t.timeline.forEachIndexed { i, event ->
+                                    TimelineRow(event, showDivider = i < t.timeline.lastIndex)
+                                }
+                            }
+                        }
+
+                        // Ações
+                        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                            if (t.isOpen) {
+                                VdOutlineButton(
+                                    label = "Resolver",
+                                    icon = Icons.Outlined.CheckCircle,
+                                    color = VdSuccess,
+                                    background = VdSuccess.copy(alpha = 0.12f),
+                                    enabled = !uiState.isActing,
+                                    onClick = { showResolveConfirm = true },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            VdOutlineButton(
+                                label = "Atribuir a mim",
+                                icon = Icons.Outlined.PersonAddAlt,
+                                enabled = !uiState.isActing,
+                                onClick = { viewModel.assignToMe() },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        VdOutlineButton(
+                            label = "Transferir para outro agente",
+                            icon = Icons.Outlined.SwapHoriz,
+                            color = c.textSecondary,
+                            enabled = !uiState.isActing,
+                            onClick = { viewModel.openTransferDialog() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(Modifier.height(40.dp))
+                    }
+                }
+            }
+        }
+
+        toast?.let {
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 40.dp)
+            ) { VdToast(it) }
+        }
+    }
+
+    if (showActions && t != null) {
+        ModalBottomSheet(
+            onDismissRequest = { showActions = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = c.surface
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Text(
+                    "Ações do ticket",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.textPrimary,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+                if (t.isOpen) {
+                    VdSheetRow(
+                        Icons.Outlined.CheckCircle, "Resolver ticket",
+                        iconTint = VdSuccess, textColor = VdSuccess,
+                        onClick = {
+                            showActions = false
+                            showResolveConfirm = true
+                        }
+                    )
+                }
+                VdSheetRow(Icons.Outlined.PersonAddAlt, "Atribuir a mim", onClick = {
+                    showActions = false
+                    viewModel.assignToMe()
+                })
+                VdSheetRow(Icons.Outlined.SwapHoriz, "Transferir para outro agente", onClick = {
+                    showActions = false
+                    viewModel.openTransferDialog()
+                })
+                Spacer(Modifier.height(28.dp))
             }
         }
     }
 }
 
 @Composable
-private fun DetailRow(
-    icon: ImageVector,
+private fun FieldRow(
     label: String,
-    trailing: @Composable () -> Unit
+    value: String,
+    valueColor: Color,
+    last: Boolean = false,
+    onClick: (() -> Unit)? = null
 ) {
+    val c = AppTheme.colors
+    var m = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 10.dp)
+    if (onClick != null) m = Modifier
+        .fillMaxWidth()
+        .clickable(onClick = onClick)
+        .padding(vertical = 10.dp)
+    Row(modifier = m, verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            fontSize = 12.sp,
+            color = c.textSecondary,
+            modifier = Modifier.width(110.dp)
+        )
+        Text(value, fontSize = 13.5.sp, fontWeight = FontWeight.Medium, color = valueColor)
+    }
+    if (!last) VdDivider()
+}
+
+@Composable
+private fun TimelineRow(event: TimelineEvent, showDivider: Boolean) {
     val c = AppTheme.colors
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(vertical = 9.dp),
+        horizontalArrangement = Arrangement.spacedBy(11.dp)
     ) {
-        Icon(icon, null, tint = c.iconMuted, modifier = Modifier.size(18.dp))
-        Spacer(modifier = Modifier.width(10.dp))
-        Text(label, fontSize = 13.sp, color = c.textSecondary, modifier = Modifier.weight(1f))
-        trailing()
-    }
-}
-
-@Composable
-private fun TimelineRow(ev: TimelineEvent, isLast: Boolean) {
-    val c = AppTheme.colors
-    val color = when (ev.type) {
-        "created" -> VipDeskBlue
-        "first_response" -> VipDeskGreen
-        "closed" -> VipDeskGreen
-        else -> VipDeskPurple
-    }
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(color)
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .background(c.chip, RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Outlined.CheckCircle, null,
+                tint = c.textSecondary, modifier = Modifier.size(13.dp)
             )
-            if (!isLast) {
-                Box(
-                    modifier = Modifier
-                        .width(2.dp)
-                        .height(34.dp)
-                        .background(c.divider)
-                )
-            }
         }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f).padding(bottom = if (isLast) 0.dp else 14.dp)) {
+        Column(Modifier.weight(1f)) {
+            Text(event.message, fontSize = 13.sp, lineHeight = 18.sp, color = c.textPrimary)
             Text(
-                text = ev.message,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = c.textPrimary,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis
+                buildString {
+                    event.user?.let { append("$it · ") }
+                    event.createdAt?.let { append(relativeTime(it)) }
+                },
+                fontSize = 10.5.sp,
+                color = c.textSecondary,
+                modifier = Modifier.padding(top = 1.dp)
             )
-            Row {
-                ev.user?.let {
-                    Text("$it · ", fontSize = 11.sp, color = c.textSecondary)
-                }
-                ev.createdAt?.let {
-                    Text(relativeTime(it), fontSize = 11.sp, color = c.textSecondary)
-                }
-            }
         }
     }
-}
-
-@Composable
-private fun AgentPickerDialog(
-    agents: List<br.com.vipdesk.mobile.data.model.User>,
-    onPick: (br.com.vipdesk.mobile.data.model.User) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val c = AppTheme.colors
-    var query by remember { mutableStateOf("") }
-    val filtered = if (query.isBlank()) agents
-    else agents.filter {
-        it.name.contains(query, true) || it.email.contains(query, true)
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Transferir para", fontWeight = FontWeight.Bold) },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = { Text("Buscar atendente...", fontSize = 14.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                if (agents.isEmpty()) {
-                    Box(Modifier.fillMaxWidth().height(80.dp), Alignment.Center) {
-                        CircularProgressIndicator(color = VipDeskPurple, strokeWidth = 2.dp)
-                    }
-                } else {
-                    LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                        items(filtered, key = { it.id }) { agent ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onPick(agent) }
-                                    .padding(vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(PurpleGradientLight),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        initialsOf(agent.name),
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        agent.name,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = c.textPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        agent.email,
-                                        fontSize = 12.sp,
-                                        color = c.textSecondary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                            HorizontalDivider(color = c.divider)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        }
-    )
+    if (showDivider) VdDivider()
 }
