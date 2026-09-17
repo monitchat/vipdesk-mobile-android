@@ -1,7 +1,9 @@
 package br.com.vipdesk.mobile.ui.conversations
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,18 +14,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,244 +45,227 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import br.com.vipdesk.mobile.data.model.Conversation
 import br.com.vipdesk.mobile.ui.common.relativeTime
-import br.com.vipdesk.mobile.ui.common.sourceLabel
+import br.com.vipdesk.mobile.ui.common.sourceVisual
+import br.com.vipdesk.mobile.ui.components.VdAppHeader
 import br.com.vipdesk.mobile.ui.components.VdAvatar
 import br.com.vipdesk.mobile.ui.components.VdCountBadge
-import br.com.vipdesk.mobile.ui.components.VdDivider
 import br.com.vipdesk.mobile.ui.components.VdEmptyState
-import br.com.vipdesk.mobile.ui.components.VdIconButton
-import br.com.vipdesk.mobile.ui.components.VdOutlineButton
+import br.com.vipdesk.mobile.ui.components.VdHeaderIcon
 import br.com.vipdesk.mobile.ui.components.VdPill
-import br.com.vipdesk.mobile.ui.components.VdPillRow
 import br.com.vipdesk.mobile.ui.components.VdSearchField
-import br.com.vipdesk.mobile.ui.components.VdSectionLabel
 import br.com.vipdesk.mobile.ui.components.VdTag
-import br.com.vipdesk.mobile.ui.components.ticketPriorityVisual
 import br.com.vipdesk.mobile.ui.components.ticketStatusVisual
 import br.com.vipdesk.mobile.ui.theme.AppTheme
+import br.com.vipdesk.mobile.ui.theme.Brand
+import br.com.vipdesk.mobile.ui.theme.Tint
 
-private data class SegDef(val label: String, val status: String)
+private val CHANNELS = listOf(
+    "whatsapp" to Brand.whatsapp,
+    "instagram" to Brand.instagram,
+    "facebook" to Brand.messenger,
+    "telegram" to Brand.telegram,
+    "email" to Brand.email,
+    "webchat" to Brand.webchat,
+    "sms" to Brand.sms
+)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationListScreen(
     onConversationClick: (Int) -> Unit,
+    onNotificationsClick: () -> Unit = {},
+    onNewConversation: () -> Unit = {},
+    unreadNotifications: Int = 0,
     viewModel: ConversationListViewModel = viewModel(factory = ConversationListViewModel.Factory)
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val c = AppTheme.colors
-    var showFilters by remember { mutableStateOf(false) }
+    var onlyUnread by remember { mutableStateOf(false) }
 
-    val segs = listOf(
-        SegDef("Minhas", "assigned"),
-        SegDef("Aguardando", "waiting"),
-        SegDef("Todas", "all")
-    )
-    fun segCount(status: String) = when (status) {
-        "assigned" -> state.counts.assigned
-        "waiting" -> state.counts.waiting
-        else -> state.counts.total
-    }
+    val list = if (onlyUnread) state.filteredConversations.filter { it.unreadMessages > 0 }
+    else state.filteredConversations
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(c.background)
-            .statusBarsPadding()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Inbox",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = (-0.4).sp,
-                color = c.textPrimary,
-                modifier = Modifier.weight(1f)
-            )
-            VdIconButton(
-                Icons.Outlined.FilterAlt,
-                onClick = { showFilters = true },
-                size = 36.dp
-            )
+    Column(Modifier.fillMaxSize().background(c.surface)) {
+        VdAppHeader(title = "Conversas") {
+            VdHeaderIcon(Icons.Outlined.Notifications, "Notificações", onNotificationsClick, badge = unreadNotifications)
+            VdHeaderIcon(Icons.Outlined.EditNote, "Nova conversa", onNewConversation, tint = c.primary)
         }
 
-        VdSearchField(
-            value = state.searchQuery,
-            onValueChange = viewModel::onSearchQueryChange,
-            placeholder = "Buscar conversas, contatos…",
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-
-        Spacer(Modifier.height(11.dp))
-        VdPillRow {
-            segs.forEach { seg ->
-                VdPill(
-                    label = seg.label,
-                    count = segCount(seg.status),
-                    selected = state.currentStatus == seg.status,
-                    onClick = { viewModel.onStatusChange(seg.status) }
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(c.surface)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            VdSearchField(
+                value = state.searchQuery,
+                onValueChange = viewModel::onSearchQueryChange,
+                placeholder = "Buscar contato, telefone ou mensagem"
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                VdPill("Minhas", state.currentStatus == "assigned", { viewModel.onStatusChange("assigned") }, count = state.counts.assigned)
+                VdPill("Fila", state.currentStatus == "waiting", { viewModel.onStatusChange("waiting") }, count = state.counts.waiting)
+                VdPill("Todas", state.currentStatus == "all", { viewModel.onStatusChange("all") })
+            }
+            // Faixa de canais
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(
+                    Modifier
+                        .size(32.dp)
+                        .background(c.primarySurface, RoundedCornerShape(8.dp))
+                        .border(1.dp, c.primaryLight, RoundedCornerShape(8.dp))
+                        .clickable { viewModel.onMediaChange("") },
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.Outlined.FilterAlt, null, tint = c.primary, modifier = Modifier.size(16.dp)) }
+                CHANNELS.forEach { (key, color) ->
+                    val on = state.currentMedia == key
+                    Box(
+                        Modifier
+                            .size(32.dp)
+                            .background(if (on) c.primarySurface else c.surface, RoundedCornerShape(8.dp))
+                            .border(1.dp, if (on) c.primary else c.divider, RoundedCornerShape(8.dp))
+                            .clickable { viewModel.onMediaChange(key) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(sourceVisual(key).icon, null, tint = color, modifier = Modifier.size(18.dp))
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (onlyUnread) "Todas · @" else "Não lidas · @",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.primary,
+                    modifier = Modifier.clickable { onlyUnread = !onlyUnread }
                 )
             }
         }
-        Spacer(Modifier.height(11.dp))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(c.divider))
 
         when {
-            state.isLoading && state.filteredConversations.isEmpty() -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = c.accent)
-                }
+            state.isLoading && list.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = c.primary)
             }
-            state.filteredConversations.isEmpty() -> {
-                VdEmptyState(
-                    icon = Icons.Outlined.Forum,
-                    title = "Nenhuma conversa aqui",
-                    subtitle = "Tente outro filtro ou limpe a busca."
-                )
-            }
-            else -> {
-                LazyColumn(Modifier.fillMaxSize()) {
-                    items(state.filteredConversations, key = { it.id }) { conv ->
-                        ConversationRow(
-                            conversation = conv,
-                            currentUserId = state.currentUserId,
-                            onClick = { onConversationClick(conv.id) }
-                        )
-                    }
-                    item { Spacer(Modifier.height(60.dp)) }
+            list.isEmpty() -> VdEmptyState(
+                icon = Icons.Outlined.Forum,
+                title = "Nenhuma conversa por aqui",
+                subtitle = "Você está em dia. Novas mensagens dos seus canais aparecem em tempo real.",
+                ctaLabel = "Nova conversa",
+                onCta = onNewConversation
+            )
+            else -> LazyColumn(Modifier.fillMaxSize()) {
+                items(list, key = { it.id }) { conv ->
+                    ConversationRow(conv, state.currentUserId) { onConversationClick(conv.id) }
                 }
-            }
-        }
-    }
-
-    if (showFilters) {
-        ModalBottomSheet(
-            onDismissRequest = { showFilters = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = c.surface
-        ) {
-            Column(Modifier.padding(horizontal = 16.dp)) {
-                Text(
-                    "Filtros",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = c.textPrimary,
-                    modifier = Modifier.padding(bottom = 10.dp)
-                )
-                VdSectionLabel("Canal")
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    listOf(
-                        "whatsapp" to "WhatsApp",
-                        "instagram" to "Instagram",
-                        "facebook" to "Messenger",
-                        "webchat" to "Web Chat"
-                    ).forEach { (key, label) ->
-                        VdPill(
-                            label = label,
-                            selected = state.currentMedia == key,
-                            onClick = { viewModel.onMediaChange(key) }
-                        )
-                    }
-                }
-                Spacer(Modifier.height(18.dp))
-                VdOutlineButton(
-                    label = "Aplicar filtros",
-                    onClick = { showFilters = false },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(28.dp))
+                item { Spacer(Modifier.height(8.dp)) }
             }
         }
     }
 }
 
 @Composable
-private fun ConversationRow(
-    conversation: Conversation,
-    currentUserId: Int?,
-    onClick: () -> Unit
-) {
+private fun ConversationRow(conversation: Conversation, currentUserId: Int?, onClick: () -> Unit) {
     val c = AppTheme.colors
     val ticket = conversation.activeTicket
-    val (stLabel, _) = ticketStatusVisual(
-        ticket?.statusName ?: ticket?.status ?: conversation.conversationState, null
-    )
-    val (_, priColor) = ticketPriorityVisual(ticket?.priority)
     val source = conversation.source ?: conversation.lastTicketSource
+    val last = conversation.lastMessage
+    val fromAgent = last?.lastMessageSender == 1
+    val waiting = ticket?.userId == null && conversation.unreadMessages > 0
     val agentName = ticket?.user?.name
-    val agentLabel = when {
-        agentName == null -> "Não atribuída"
-        ticket.userId != null && ticket.userId == currentUserId -> "Você"
-        else -> agentName.split(" ").firstOrNull() ?: agentName
+    val (stLabel, stColor) = ticketStatusVisual(ticket?.statusName ?: ticket?.status, null)
+    val stBg = when (stLabel) {
+        "Resolvido", "Finalizado" -> Tint.greenBg
+        "Pendente" -> Tint.yellowBg
+        "Aberto", "Em andamento" -> Tint.blueBg
+        else -> c.surfaceAlt
+    }
+    val stFg = when (stLabel) {
+        "Resolvido", "Finalizado" -> Tint.greenFg
+        "Pendente" -> Tint.yellowFg
+        "Aberto", "Em andamento" -> Tint.blueFg
+        else -> Tint.grayFg
     }
 
-    Column(Modifier.clickable(onClick = onClick)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(11.dp)
-        ) {
-            VdAvatar(name = conversation.contact.name, size = 46.dp, source = source)
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        conversation.contact.name,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = c.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        conversation.lastMessage?.createdAtRaw?.let { relativeTime(it) }
-                            ?: conversation.lastMessage?.createdAt.orEmpty(),
-                        fontSize = 11.sp,
-                        color = c.textSecondary
-                    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (waiting) Color(0xFFFDF2F2) else c.surface)
+            .clickable(onClick = onClick)
+            .then(if (waiting) Modifier.border(0.dp, Color.Transparent) else Modifier)
+            .padding(start = if (waiting) 9.dp else 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        if (waiting) {
+            Box(Modifier.width(3.dp).height(44.dp).background(c.danger, RoundedCornerShape(2.dp)))
+        }
+        VdAvatar(name = conversation.contact.name, size = 44.dp, source = source)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    conversation.contact.name,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = c.text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                val timeLabel = last?.createdAtRaw?.let { relativeTime(it) } ?: last?.createdAt.orEmpty()
+                Text(
+                    timeLabel,
+                    fontSize = 11.sp,
+                    fontWeight = if (waiting) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (waiting) c.danger else c.muted
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (fromAgent) {
+                    Icon(Icons.Default.DoneAll, null, tint = c.info, modifier = Modifier.size(14.dp))
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        conversation.lastMessage?.message ?: "Sem mensagens",
-                        fontSize = 13.sp,
-                        color = c.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (conversation.unreadMessages > 0) {
-                        VdCountBadge(conversation.unreadMessages)
+                Text(
+                    buildString {
+                        if (fromAgent) append("Você: ")
+                        append(last?.message?.replace(Regex("<[^>]*>"), "") ?: "Sem mensagens")
+                    },
+                    fontSize = 12.sp,
+                    color = if (conversation.unreadMessages > 0) c.textTertiary else c.muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (conversation.unreadMessages > 0) {
+                    VdCountBadge(conversation.unreadMessages, background = if (waiting) c.danger else c.success)
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (ticket != null) VdTag(stLabel, color = stFg, background = stBg)
+                if (conversation.autoReply == 1) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Icon(Icons.Outlined.SmartToy, null, tint = c.info, modifier = Modifier.size(12.dp))
+                        Text("bot ativo", fontSize = 10.sp, color = c.muted)
                     }
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 5.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(Modifier.size(6.dp).background(priColor, CircleShape))
-                    VdTag(stLabel)
-                    source?.let {
-                        VdTag(
-                            sourceLabel(it),
-                            color = c.accentTint,
-                            background = c.accentSoft
-                        )
-                    }
-                    Spacer(Modifier.weight(1f))
-                    Text(agentLabel, fontSize = 10.5.sp, color = c.textFaint)
+                Spacer(Modifier.weight(1f))
+                if (ticket != null) {
+                    Text(
+                        buildString {
+                            append("Ticket #${ticket.id}")
+                            ticket.departmentName?.let { append(" · $it") }
+                        },
+                        fontSize = 10.sp, color = c.muted, maxLines = 1
+                    )
+                }
+                if (agentName != null) {
+                    VdAvatar(name = agentName, size = 18.dp, fontSize = 8, agent = true)
+                } else {
+                    Text("sem atendente", fontSize = 10.sp, color = c.muted)
                 }
             }
         }
-        VdDivider(Modifier.padding(start = 73.dp))
     }
+    Box(Modifier.fillMaxWidth().height(1.dp).background(c.surfaceAlt))
 }

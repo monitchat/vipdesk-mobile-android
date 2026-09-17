@@ -3,6 +3,7 @@ package br.com.vipdesk.mobile.ui.login
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import br.com.vipdesk.mobile.data.model.MfaChallenge
 import br.com.vipdesk.mobile.data.repository.AuthRepository
 import br.com.vipdesk.mobile.di.AppContainer
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,11 +12,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class LoginUiState(
-    val email: String = "ricardo@monitchat.com",
-    val password: String = "Mestre@22@87",
+    val email: String = "",
+    val password: String = "",
     val isLoading: Boolean = false,
     val error: String? = null,
-    val isLoggedIn: Boolean = false
+    val isLoggedIn: Boolean = false,
+    // Tela 06: desafio MFA pendente (código TOTP, e-mail ou recuperação)
+    val mfa: MfaChallenge? = null,
+    val mfaCode: String = "",
+    val mfaError: String? = null,
+    val mfaInfo: String? = null
 )
 
 class LoginViewModel(
@@ -34,6 +40,11 @@ class LoginViewModel(
             val loggedIn = authRepository.isLoggedIn()
             _uiState.value = _uiState.value.copy(isLoggedIn = loggedIn)
         }
+    }
+
+    /** Sessão derrubada fora do fluxo de login: volta ao formulário limpo. */
+    fun onSessionLost() {
+        _uiState.value = LoginUiState()
     }
 
     fun onEmailChange(email: String) {
@@ -55,9 +66,7 @@ class LoginViewModel(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             val result = authRepository.login(state.email, state.password)
             result.fold(
-                onSuccess = {
-                    _uiState.value = _uiState.value.copy(isLoading = false, isLoggedIn = true)
-                },
+                onSuccess = { outcome -> applyOutcome(outcome) },
                 onFailure = {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -66,6 +75,57 @@ class LoginViewModel(
                 }
             )
         }
+    }
+
+    private fun applyOutcome(outcome: AuthRepository.LoginOutcome) {
+        _uiState.value = when (outcome) {
+            is AuthRepository.LoginOutcome.LoggedIn ->
+                _uiState.value.copy(isLoading = false, isLoggedIn = true, mfa = null, mfaCode = "", mfaError = null)
+            is AuthRepository.LoginOutcome.MfaRequired ->
+                _uiState.value.copy(isLoading = false, mfa = outcome.challenge, mfaCode = "", mfaError = null, mfaInfo = null)
+        }
+    }
+
+    fun onMfaCodeChange(code: String) {
+        // TOTP/e-mail = 6 dígitos; código de recuperação pode ter até 9 caracteres alfanuméricos
+        val cleaned = code.filter { it.isLetterOrDigit() }.take(9).uppercase()
+        _uiState.value = _uiState.value.copy(mfaCode = cleaned, mfaError = null)
+    }
+
+    fun verifyMfa() {
+        val state = _uiState.value
+        val challenge = state.mfa ?: return
+        if (state.mfaCode.length < 6) {
+            _uiState.value = state.copy(mfaError = "Digite o código de 6 dígitos")
+            return
+        }
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, mfaError = null)
+            authRepository.verifyMfa(challenge, state.mfaCode, state.email).fold(
+                onSuccess = { applyOutcome(it) },
+                onFailure = {
+                    val msg = it.message ?: "Código inválido"
+                    // Token MFA expirado/estourou tentativas: volta ao formulário
+                    val expired = msg.contains("expirado", true) || msg.contains("Faca login", true) || msg.contains("Faça login", true)
+                    _uiState.value = if (expired) _uiState.value.copy(isLoading = false, mfa = null, mfaCode = "", error = msg)
+                    else _uiState.value.copy(isLoading = false, mfaError = msg)
+                }
+            )
+        }
+    }
+
+    fun resendMfaEmail() {
+        val challenge = _uiState.value.mfa ?: return
+        viewModelScope.launch {
+            authRepository.resendMfaEmail(challenge).fold(
+                onSuccess = { _uiState.value = _uiState.value.copy(mfaInfo = "Novo código enviado para o seu e-mail") },
+                onFailure = { _uiState.value = _uiState.value.copy(mfaError = it.message) }
+            )
+        }
+    }
+
+    fun cancelMfa() {
+        _uiState.value = _uiState.value.copy(mfa = null, mfaCode = "", mfaError = null, mfaInfo = null, password = "")
     }
 
     companion object {

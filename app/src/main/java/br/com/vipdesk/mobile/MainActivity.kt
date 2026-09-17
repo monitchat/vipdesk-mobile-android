@@ -3,12 +3,15 @@ package br.com.vipdesk.mobile
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
@@ -23,11 +26,17 @@ import br.com.vipdesk.mobile.ui.theme.VipDeskTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         ThemeController.init(this)
         requestNotificationPermission()
         consumeNotificationIntent(intent)
         setContent {
+            // Barras do sistema seguem o tema do app (não o do sistema): claro = ícones escuros.
+            val dark = ThemeController.dark
+            LaunchedEffect(dark) {
+                val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT)
+                else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+            }
             VipDeskTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),

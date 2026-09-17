@@ -8,6 +8,8 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 
+private const val SPACES_CDN = "https://monitchat.nyc3.digitaloceanspaces.com/app"
+
 class ConversationRepository(private val apiService: ApiService) {
 
     var lastCounts: ConversationCountResponse? = null
@@ -105,18 +107,56 @@ class ConversationRepository(private val apiService: ApiService) {
         }
     }
 
-    suspend fun uploadFile(conversationId: Int, file: File, mimeType: String): Result<Any> {
+    /**
+     * Envio de anexo em dois passos, como o web: `conversation-file/{id}` só guarda o
+     * arquivo e devolve `src`; a mensagem é criada por `imageMessage` (message_type 4,
+     * src com CDN) ou `documentMessage` (message_type 3, src cru).
+     */
+    suspend fun sendFileMessage(
+        conversationId: Int,
+        file: File,
+        mimeType: String,
+        ticketId: Int? = null,
+        accountNumber: String? = null,
+        userName: String? = null
+    ): Result<Unit> {
         return try {
             val requestFile = file.asRequestBody(mimeType.toMediaTypeOrNull())
             val filePart = MultipartBody.Part.createFormData("file", file.name, requestFile)
             val typePart = mimeType.toRequestBody("text/plain".toMediaTypeOrNull())
-            val response = apiService.uploadFile(conversationId, filePart, typePart)
-            if (response.isSuccessful) {
-                Result.success(response.body() ?: Any())
-            } else {
-                Result.failure(Exception("Erro ao enviar arquivo"))
-            }
+            val upload = apiService.uploadFile(conversationId, filePart, typePart)
+            if (!upload.isSuccessful) return Result.failure(Exception(errorMessage(upload, "Erro ao enviar arquivo")))
+            val src = upload.body()?.get("src")?.takeIf { !it.isJsonNull }?.asString
+                ?: return Result.failure(Exception("Upload sem src"))
+
+            val isImage = mimeType.startsWith("image/")
+            val payload = mutableMapOf<String, Any>(
+                "message" to "",
+                "conversation_id" to conversationId,
+                "mime_type" to mimeType,
+                "file_name" to file.name,
+                "ext" to file.extension,
+                "timestamp" to System.currentTimeMillis() / 1000,
+                "source" to "message",
+                "human_date" to "agora mesmo",
+                "status" to 0,
+                "sender" to 1,
+                "message_token" to java.util.UUID.randomUUID().toString().replace("-", ""),
+                "type" to if (isImage) "image" else mimeType,
+                "src" to if (isImage) "$SPACES_CDN/$src" else src,
+                "message_type" to if (isImage) 4 else 3
+            )
+            ticketId?.let { payload["ticket_id"] = it }
+            accountNumber?.let { payload["account_number"] = it }
+            userName?.let { payload["user"] = it }
+
+            val body = com.google.gson.Gson().toJsonTree(payload).asJsonObject
+            val response = if (isImage) apiService.sendImageMessage(conversationId, body)
+            else apiService.sendDocumentMessage(conversationId, body)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception(errorMessage(response, "Erro ao enviar arquivo")))
         } catch (e: Exception) {
+            android.util.Log.e("VipDeskUpload", "sendFileMessage failed", e)
             Result.failure(e)
         }
     }
@@ -128,10 +168,17 @@ class ConversationRepository(private val apiService: ApiService) {
     ): Result<List<Comment>> {
         return try {
             val response = apiService.getComments(conversationId, take, skip)
-            if (response.isSuccessful && response.body()?.data != null) {
-                Result.success(response.body()!!.data!!)
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                val arr = when {
+                    body.isJsonArray -> body.asJsonArray
+                    body.isJsonObject && body.asJsonObject.get("data")?.isJsonArray == true -> body.asJsonObject.getAsJsonArray("data")
+                    else -> com.google.gson.JsonArray()
+                }
+                val type = object : com.google.gson.reflect.TypeToken<List<Comment>>() {}.type
+                Result.success(br.com.vipdesk.mobile.di.AppContainer.gson.fromJson(arr, type))
             } else {
-                Result.failure(Exception("Erro ao buscar comentarios"))
+                Result.failure(Exception("Erro ao carregar comentários"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -147,13 +194,19 @@ class ConversationRepository(private val apiService: ApiService) {
             val request = SendCommentRequest(
                 message = message,
                 conversationId = conversationId,
-                ticketId = ticketId
+                ticketId = ticketId,
+                userId = br.com.vipdesk.mobile.di.AppContainer.tokenManager.getUserId()
             )
             val response = apiService.sendComment(request)
             if (response.isSuccessful && response.body()?.data != null) {
                 Result.success(response.body()!!.data!!)
             } else {
-                Result.failure(Exception("Erro ao enviar comentario"))
+                val detail = try {
+                    val body = response.errorBody()?.string().orEmpty()
+                    com.google.gson.JsonParser.parseString(body).asJsonObject
+                        .getAsJsonObject("errors")?.getAsJsonObject("global")?.get("message")?.asString
+                } catch (_: Exception) { null }
+                Result.failure(Exception(detail?.take(160) ?: "Erro ao enviar comentário (HTTP ${response.code()})"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -179,30 +232,35 @@ class ConversationRepository(private val apiService: ApiService) {
         }
     }
 
-    suspend fun changeTicketOwner(ticketId: Int, userId: Int): Result<Ticket> {
+    // setTicketOwner/setTicketStatus respondem {title, message, status} sem `data`;
+    // exigir `data` fazia a transferência "falhar" mesmo com HTTP 200.
+    suspend fun changeTicketOwner(ticketId: Int, userId: Int): Result<Unit> {
         return try {
             val response = apiService.changeTicketOwner(ChangeOwnerRequest(ticketId, userId))
-            if (response.isSuccessful && response.body()?.data != null) {
-                Result.success(response.body()!!.data!!)
-            } else {
-                Result.failure(Exception("Erro ao transferir atendimento"))
-            }
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception(errorMessage(response, "Erro ao transferir atendimento")))
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    suspend fun changeTicketStatus(ticketId: Int, status: String): Result<Ticket> {
+    suspend fun changeTicketStatus(ticketId: Int, status: String, pendingReason: String? = null): Result<Unit> {
         return try {
-            val response = apiService.changeTicketStatus(ChangeStatusRequest(ticketId, status))
-            if (response.isSuccessful && response.body()?.data != null) {
-                Result.success(response.body()!!.data!!)
-            } else {
-                Result.failure(Exception("Erro ao alterar status"))
-            }
+            val response = apiService.changeTicketStatus(ChangeStatusRequest(ticketId.toString(), status, pendingReason))
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception(errorMessage(response, "Erro ao alterar status")))
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private fun errorMessage(response: retrofit2.Response<*>, fallback: String): String {
+        val raw = runCatching { response.errorBody()?.string() }.getOrNull() ?: return fallback
+        return runCatching {
+            val obj = com.google.gson.JsonParser.parseString(raw).asJsonObject
+            obj.getAsJsonObject("errors")?.getAsJsonObject("global")?.get("message")?.asString
+                ?: obj.get("message")?.takeIf { it.isJsonPrimitive }?.asString
+        }.getOrNull() ?: fallback
     }
 
     suspend fun getDepartments(): Result<List<Department>> {

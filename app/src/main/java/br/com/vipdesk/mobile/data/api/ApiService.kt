@@ -13,6 +13,12 @@ interface ApiService {
     @POST("auth/login")
     suspend fun login(@Body request: LoginRequest): Response<LoginResponse>
 
+    @POST("auth/mfa/verify")
+    suspend fun verifyMfa(@Body request: MfaVerifyRequest): Response<LoginResponse>
+
+    @POST("auth/mfa/resend-email")
+    suspend fun resendMfaEmail(@Body request: MfaResendRequest): Response<com.google.gson.JsonObject>
+
     @POST("auth/logout")
     suspend fun logout(@Body body: Map<String, Boolean> = mapOf("ignore_revoke" to false)): Response<Any>
 
@@ -23,6 +29,13 @@ interface ApiService {
 
     @GET("user")
     suspend fun getUsers(): Response<ApiResponse<List<User>>>
+
+    /** Mensagens rápidas da empresa (o web usa only_fast_menu=1 no composer). */
+    @GET("fast-message")
+    suspend fun getFastMessages(
+        @Query("only_fast_menu") onlyFastMenu: Int = 1,
+        @Query("take") take: Int = 100
+    ): Response<ApiResponse<List<FastMessage>>>
 
     // ============ CONTACTS (CRM) ============
 
@@ -51,8 +64,20 @@ interface ApiService {
         @Query("search") search: String? = null,
         @Query("status") status: String? = null,
         @Query("take") take: Int = 30,
-        @Query("skip") skip: Int = 0
+        @Query("skip") skip: Int = 0,
+        @Query("pipeline_id") pipelineId: Int? = null,
+        @Query("contact_id") contactId: Int? = null,
+        @Query("view") view: String? = null
     ): Response<DealListResponse>
+
+    @GET("deal/{id}")
+    suspend fun getDeal(@Path("id") dealId: Int): Response<DealEnvelope>
+
+    @GET("contact/{id}")
+    suspend fun getContact(@Path("id") contactId: Int): Response<com.google.gson.JsonObject>
+
+    @GET("contact/{id}/conversations")
+    suspend fun getContactConversations(@Path("id") contactId: Int): Response<com.google.gson.JsonElement>
 
     @POST("deal")
     suspend fun createDeal(@Body body: CreateDealRequest): Response<DealEnvelope>
@@ -77,6 +102,55 @@ interface ApiService {
 
     @GET("user/{id}/info/")
     suspend fun getUserInfo(@Path("id") userId: Int): Response<User>
+
+    /** Estado de pausa atual: `currentPause` é null quando disponível. */
+    @GET("user/{id}/info/")
+    suspend fun getUserInfoRaw(@Path("id") userId: Int): Response<com.google.gson.JsonObject>
+
+    // ============ KANBAN (quadros de tarefas) ============
+
+    @GET("kanban/boards")
+    suspend fun getKanbanBoards(): Response<com.google.gson.JsonObject>
+
+    @GET("kanban/boards/{id}")
+    suspend fun getKanbanBoard(@Path("id") boardId: Int): Response<com.google.gson.JsonObject>
+
+    @GET("kanban/boards/{id}/tasks")
+    suspend fun getKanbanTasks(@Path("id") boardId: Int, @Query("limit") limit: Int = 200): Response<com.google.gson.JsonElement>
+
+    @POST("kanban/boards/{id}/tasks")
+    suspend fun createKanbanTask(@Path("id") boardId: Int, @Body body: com.google.gson.JsonObject): Response<com.google.gson.JsonObject>
+
+    @POST("kanban/boards/{id}/tasks/{taskId}/move")
+    suspend fun moveKanbanTask(@Path("id") boardId: Int, @Path("taskId") taskId: Int, @Body body: com.google.gson.JsonObject): Response<com.google.gson.JsonObject>
+
+    @POST("kanban/boards/{id}/tasks/{taskId}/archive")
+    suspend fun archiveKanbanTask(@Path("id") boardId: Int, @Path("taskId") taskId: Int, @Body body: com.google.gson.JsonObject): Response<com.google.gson.JsonObject>
+
+    @GET("kanban/boards/{id}/tasks/{taskId}/checklist")
+    suspend fun getKanbanChecklist(@Path("id") boardId: Int, @Path("taskId") taskId: Int): Response<com.google.gson.JsonObject>
+
+    @POST("kanban/boards/{id}/tasks/{taskId}/checklist")
+    suspend fun createKanbanChecklistItem(@Path("id") boardId: Int, @Path("taskId") taskId: Int, @Body body: com.google.gson.JsonObject): Response<com.google.gson.JsonObject>
+
+    @PUT("kanban/boards/{id}/tasks/{taskId}/checklist/{itemId}")
+    suspend fun updateKanbanChecklistItem(@Path("id") boardId: Int, @Path("taskId") taskId: Int, @Path("itemId") itemId: Int, @Body body: com.google.gson.JsonObject): Response<com.google.gson.JsonObject>
+
+    @GET("kanban/boards/{id}/tasks/{taskId}/comments")
+    suspend fun getKanbanComments(@Path("id") boardId: Int, @Path("taskId") taskId: Int): Response<com.google.gson.JsonObject>
+
+    @POST("kanban/boards/{id}/tasks/{taskId}/comments")
+    suspend fun createKanbanComment(@Path("id") boardId: Int, @Path("taskId") taskId: Int, @Body body: com.google.gson.JsonObject): Response<com.google.gson.JsonObject>
+
+    @GET("ticket-status")
+    suspend fun getTicketStatuses(@Query("take") take: Int = 100): Response<ApiResponse<List<TicketStatusOption>>>
+
+    @GET("interruption-type")
+    suspend fun getInterruptionTypes(@Query("take") take: Int = 100): Response<ApiResponse<List<InterruptionType>>>
+
+    /** Alterna a pausa do usuário (entra com o motivo; sai se já estiver pausado). */
+    @POST("user/pause/{id}")
+    suspend fun pauseUser(@Path("id") userId: Int, @Body body: com.google.gson.JsonObject): Response<com.google.gson.JsonObject>
 
     // ============ CONVERSATIONS ============
 
@@ -104,12 +178,13 @@ interface ApiService {
         @Query("skip") skip: Int = 0
     ): Response<ApiResponse<List<Message>>>
 
+    // Responde array puro (sem envelope `data`); o repositório aceita os dois formatos.
     @GET("conversation/{id}/comments")
     suspend fun getComments(
         @Path("id") conversationId: Int,
         @Query("take") take: Int = 20,
         @Query("skip") skip: Int = 0
-    ): Response<ApiResponse<List<Comment>>>
+    ): Response<com.google.gson.JsonElement>
 
     @GET("conversation/{id}/tickets")
     suspend fun getConversationTickets(
@@ -134,19 +209,19 @@ interface ApiService {
     @POST("conversation/{id}/imageMessage")
     suspend fun sendImageMessage(
         @Path("id") conversationId: Int,
-        @Body message: Map<String, Any>
+        @Body message: com.google.gson.JsonObject
     ): Response<ApiResponse<Message>>
 
     @POST("conversation/{id}/documentMessage")
     suspend fun sendDocumentMessage(
         @Path("id") conversationId: Int,
-        @Body message: Map<String, Any>
+        @Body message: com.google.gson.JsonObject
     ): Response<ApiResponse<Message>>
 
     @POST("conversation/{id}/voiceMessage")
     suspend fun sendVoiceMessage(
         @Path("id") conversationId: Int,
-        @Body message: Map<String, Any>
+        @Body message: com.google.gson.JsonObject
     ): Response<ApiResponse<Message>>
 
     @Multipart
@@ -155,7 +230,7 @@ interface ApiService {
         @Path("id") conversationId: Int,
         @Part file: MultipartBody.Part,
         @Part("type") type: RequestBody? = null
-    ): Response<ApiResponse<Any>>
+    ): Response<com.google.gson.JsonObject>
 
     // ============ COMMENTS ============
 
@@ -207,6 +282,27 @@ interface ApiService {
         @Query("take") take: Int = 20,
         @Query("page") page: Int = 1
     ): Response<ApiResponse<List<Message>>>
+
+    // ============ AGENDA ============
+
+    // O ResourceCollection do Laravel pode vir como array puro ou {"data":[...]}
+    @GET("appointments/range")
+    suspend fun getAppointmentsRange(
+        @Query("start_date") startDate: String,
+        @Query("end_date") endDate: String,
+        @Query("professional_id") professionalId: Int? = null
+    ): Response<com.google.gson.JsonElement>
+
+    @PUT("appointments/{id}/confirm")
+    suspend fun confirmAppointment(@Path("id") id: Int): Response<Any>
+
+    // ============ ESTATÍSTICAS (dashboard — mesmos endpoints da web) ============
+
+    @GET("statistic")
+    suspend fun getStatistics(@Query("filter") filterJson: String): Response<StatisticsResponse>
+
+    @GET("statistic/statisticsCount")
+    suspend fun getStatisticsCount(@Query("filter") filterJson: String): Response<StatisticsCountResponse>
 
     // ============ MOBILE ============
 

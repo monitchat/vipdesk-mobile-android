@@ -1,7 +1,6 @@
 package br.com.vipdesk.mobile.ui.dashboard
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,20 +12,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.outlined.ConfirmationNumber
-import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Timer
-import androidx.compose.material.icons.outlined.Verified
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -41,278 +33,192 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import br.com.vipdesk.mobile.data.model.RecentTicket
 import br.com.vipdesk.mobile.ui.common.initialsOf
 import br.com.vipdesk.mobile.ui.common.relativeTime
-import br.com.vipdesk.mobile.ui.components.VdAvatar
+import br.com.vipdesk.mobile.ui.common.sourceLabel
+import br.com.vipdesk.mobile.ui.common.sourceVisual
+import br.com.vipdesk.mobile.ui.components.VdBar
 import br.com.vipdesk.mobile.ui.components.VdCard
-import br.com.vipdesk.mobile.ui.components.VdIconButton
+import br.com.vipdesk.mobile.ui.components.VdHeaderIcon
 import br.com.vipdesk.mobile.ui.components.VdKpiCard
-import br.com.vipdesk.mobile.ui.components.VdSectionLabel
+import br.com.vipdesk.mobile.ui.components.VdPill
+import br.com.vipdesk.mobile.ui.components.VdPillRow
+import br.com.vipdesk.mobile.ui.components.VdPresenceChip
+import br.com.vipdesk.mobile.ui.components.VdSubHeader
 import br.com.vipdesk.mobile.ui.components.VdTag
 import br.com.vipdesk.mobile.ui.components.ticketPriorityVisual
+import br.com.vipdesk.mobile.ui.components.ticketStatusTint
 import br.com.vipdesk.mobile.ui.components.ticketStatusVisual
 import br.com.vipdesk.mobile.ui.theme.AppTheme
-import br.com.vipdesk.mobile.ui.theme.VdDanger
-import br.com.vipdesk.mobile.ui.theme.VdSuccess
-import br.com.vipdesk.mobile.ui.theme.VdWarning
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
+import br.com.vipdesk.mobile.ui.theme.Tint
 
+private val PERIODS = listOf("Hoje" to "today", "Ontem" to "yesterday", "Semana" to "week", "Mês" to "month")
+
+/** Dashboard operacional (tela 08): grade 4×2 de KPIs, por canal, atividade recente. */
 @Composable
 fun DashboardScreen(
+    onBack: () -> Unit,
     onTicketClick: (Int) -> Unit,
     onSeeAllTickets: () -> Unit,
     onNotificationsClick: () -> Unit,
-    onSearchClick: () -> Unit = {},
-    onSettingsClick: () -> Unit = {},
-    onOpenInbox: () -> Unit = {},
     viewModel: DashboardViewModel = viewModel(factory = DashboardViewModel.Factory)
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val c = AppTheme.colors
     val dash = state.dashboard
+    val stats = state.stats
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(c.background)
-            .statusBarsPadding()
-    ) {
-        // Cabeçalho
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box(Modifier.clip(CircleShape).clickable(onClick = onSettingsClick)) {
-                VdAvatar(name = state.userName.ifBlank { "A" }, size = 40.dp, fontSize = 15)
+    Column(Modifier.fillMaxSize().background(c.background)) {
+        VdSubHeader(
+            title = "Dashboard",
+            onBack = onBack,
+            actions = {
+                br.com.vipdesk.mobile.ui.components.VdLivePresenceChip()
+                VdHeaderIcon(Icons.Outlined.Notifications, "Notificações", onNotificationsClick, badge = state.unreadNotifications)
             }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "${greeting()}, ${state.userName.ifBlank { "agente" }}",
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = (-0.2).sp,
-                    color = c.textPrimary
-                )
-                Text(todayLabel(), fontSize = 12.sp, color = c.textSecondary)
-            }
-            VdIconButton(Icons.Outlined.Search, onClick = onSearchClick)
-            VdIconButton(
-                Icons.Outlined.Notifications,
-                onClick = onNotificationsClick,
-                showDot = state.unreadNotifications > 0
-            )
+        )
+        VdPillRow(modifier = Modifier.padding(vertical = 10.dp)) {
+            PERIODS.forEach { (label, key) -> VdPill(label, state.period == key, { viewModel.setPeriod(key) }) }
         }
 
-        if (state.isLoading && dash.recentTickets.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = c.accent)
-            }
+        if (state.isLoading && dash.recentTickets.isEmpty() && stats.openTickets.count == 0) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.primary) }
             return@Column
         }
 
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Spacer(Modifier.height(0.dp))
-
-            // Alerta de SLA
-            if (!dash.sla.within) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(VdDanger.copy(alpha = 0.10f))
-                        .border(1.dp, VdDanger.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-                        .clickable(onClick = onSeeAllTickets)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(Icons.Default.Warning, null, tint = VdDanger, modifier = Modifier.size(18.dp))
-                    Text(
-                        buildString {
-                            append("SLA em risco")
-                            if (dash.sla.status.isNotBlank()) append(" · ${dash.sla.status}")
-                        },
-                        fontSize = 13.sp,
-                        color = c.textPrimary,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight, null,
-                        tint = c.textSecondary, modifier = Modifier.size(18.dp)
-                    )
-                }
+            // Grade 4×2
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                VdKpiCard("${stats.waitingTickets.count}", "Em fila", Modifier.weight(1f), numberColor = if (stats.waitingTickets.count > 0) Tint.amberFg else c.text, onClick = onSeeAllTickets)
+                VdKpiCard("${stats.assignedTickets.count}", "Em atend.", Modifier.weight(1f), onClick = onSeeAllTickets)
+                VdKpiCard("${stats.ignoredTickets.count}", "Sem resp.", Modifier.weight(1f), numberColor = if (stats.ignoredTickets.count > 0) Tint.redFg else c.text, delta = "> timeout", onClick = onSeeAllTickets)
+                VdKpiCard("${stats.closedTickets.count}", "Finaliz.", Modifier.weight(1f), deltaColor = Tint.greenFg, delta = periodLabel(state.period), onClick = onSeeAllTickets)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                VdKpiCard(
+                    "${dash.sla.value}%", "SLA 30d", Modifier.weight(1f),
+                    numberColor = if (dash.sla.within) c.text else Tint.amberFg,
+                    delta = "meta ${dash.sla.target}%", deltaColor = if (dash.sla.within) Tint.greenFg else Tint.redFg,
+                    topAccent = if (dash.sla.within) null else c.warning
+                )
+                VdKpiCard(dash.avgResponse.label, "TME", Modifier.weight(1f), delta = dash.avgResponse.deltaLabel, deltaColor = if (dash.avgResponse.improved == true) Tint.greenFg else Tint.redFg)
+                VdKpiCard("${stats.openTickets.count}", "Iniciados", Modifier.weight(1f), delta = periodLabel(state.period), onClick = onSeeAllTickets)
+                VdKpiCard("${dash.agentsOnline.value}", "Online", Modifier.weight(1f), delta = if (dash.agentsOnline.value > 0) "agentes" else "ninguém", deltaColor = if (dash.agentsOnline.value > 0) Tint.greenFg else c.muted)
             }
 
-            // KPIs (2 colunas)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                VdKpiCard(
-                    number = "${dash.ticketsOpen.value}",
-                    label = "Tickets abertos",
-                    icon = Icons.Outlined.ConfirmationNumber,
-                    delta = dash.ticketsOpen.deltaLabel,
-                    deltaColor = if (dash.ticketsOpen.deltaPct <= 0) VdSuccess else VdWarning,
-                    modifier = Modifier.weight(1f),
-                    onClick = onSeeAllTickets
-                )
-                VdKpiCard(
-                    number = "${dash.sla.value}${dash.sla.unit}",
-                    label = "SLA cumprido",
-                    icon = Icons.Outlined.Verified,
-                    numberColor = if (dash.sla.within) c.textPrimary else VdDanger,
-                    modifier = Modifier.weight(1f),
-                    onClick = onSeeAllTickets
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                VdKpiCard(
-                    number = dash.avgResponse.label,
-                    label = "Tempo médio de resposta",
-                    icon = Icons.Outlined.Timer,
-                    delta = dash.avgResponse.deltaLabel,
-                    deltaColor = if (dash.avgResponse.improved == true) VdSuccess else VdWarning,
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenInbox
-                )
-                VdKpiCard(
-                    number = "${dash.agentsOnline.value}",
-                    label = "Agentes ativos",
-                    icon = Icons.Outlined.Groups,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // Atividade recente (tickets)
-            VdCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    VdSectionLabel("Atividade recente")
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        "ver tudo",
-                        fontSize = 12.sp,
-                        color = c.accent,
-                        modifier = Modifier.clickable(onClick = onSeeAllTickets)
-                    )
-                }
-                if (dash.recentTickets.isEmpty()) {
-                    Text(
-                        "Nenhum ticket recente.",
-                        fontSize = 13.sp,
-                        color = c.textSecondary,
-                        modifier = Modifier.padding(vertical = 12.dp)
-                    )
-                } else {
-                    dash.recentTickets.forEachIndexed { i, t ->
-                        RecentTicketRow(
-                            ticket = t,
-                            showDivider = i < dash.recentTickets.lastIndex,
-                            onClick = { onTicketClick(t.id) }
-                        )
+            // Termômetro (distribuição por status)
+            val statuses = state.distributions.status.filter { it.total > 0 }
+            if (statuses.isNotEmpty()) {
+                val total = statuses.sumOf { it.total }.coerceAtLeast(1)
+                VdCard(padding = 12.dp) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Tickets por status", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.text, modifier = Modifier.weight(1f))
+                        Text("$total tickets", fontSize = 11.sp, color = c.muted)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(7.dp))) {
+                        statuses.forEachIndexed { i, s ->
+                            val (_, fg) = ticketStatusTint(s.label)
+                            Box(Modifier.weight(s.total.toFloat()).height(14.dp).background(statusBar(fg, i)), contentAlignment = Alignment.Center) {
+                                if (s.total * 100 / total >= 12) Text("${s.total}", fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        statuses.forEachIndexed { i, s ->
+                            val (_, fg) = ticketStatusTint(s.label)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Box(Modifier.size(7.dp).background(statusBar(fg, i), RoundedCornerShape(2.dp)))
+                                Text("${s.label} · ${s.total} (${s.total * 100 / total}%)", fontSize = 10.sp, color = c.muted)
+                            }
+                        }
                     }
                 }
             }
 
-            state.error?.let {
-                Text(it, fontSize = 12.sp, color = VdDanger)
-            }
-
-            Spacer(Modifier.height(56.dp))
-        }
-    }
-}
-
-@Composable
-private fun RecentTicketRow(
-    ticket: RecentTicket,
-    showDivider: Boolean,
-    onClick: () -> Unit
-) {
-    val c = AppTheme.colors
-    val (stLabel, stColor) = ticketStatusVisual(ticket.status, null)
-    val (_, priColor) = ticketPriorityVisual(ticket.priority)
-    Column(Modifier.clickable(onClick = onClick)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 9.dp),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(11.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(30.dp)
-                    .background(c.chip, RoundedCornerShape(9.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    initialsOf(ticket.contactName),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = c.textSecondary
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    ticket.title ?: "Ticket ${ticket.ticketNumber ?: "#${ticket.id}"}",
-                    fontSize = 13.5.sp,
-                    color = c.textPrimary,
-                    maxLines = 2
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(top = 3.dp)
-                ) {
-                    Box(Modifier.size(6.dp).background(priColor, CircleShape))
-                    VdTag(stLabel, color = stColor, background = stColor.copy(alpha = 0.15f))
-                    Text(
-                        buildString {
-                            append(ticket.contactName)
-                            ticket.createdAt?.let { append(" · ${relativeTime(it)}") }
-                        },
-                        fontSize = 11.5.sp,
-                        color = c.textSecondary,
-                        maxLines = 1
-                    )
+            // Por canal
+            val sources = state.distributions.source.filter { it.total > 0 }.sortedByDescending { it.total }
+            if (sources.isNotEmpty()) {
+                val total = sources.sumOf { it.total }.coerceAtLeast(1)
+                VdCard(padding = 12.dp) {
+                    Text("Por canal", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.text, modifier = Modifier.padding(bottom = 6.dp))
+                    sources.forEach { s ->
+                        val sv = sourceVisual(s.source)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 3.dp)) {
+                            Icon(sv.icon, null, tint = sv.color, modifier = Modifier.size(16.dp))
+                            Text(sourceLabel(s.source), fontSize = 11.sp, color = c.text, modifier = Modifier.width(64.dp), maxLines = 1)
+                            VdBar(s.total.toFloat() / total, c.primary, Modifier.weight(1f))
+                            Text("${s.total * 100 / total}%", fontSize = 11.sp, color = c.muted, modifier = Modifier.width(30.dp))
+                        }
+                    }
                 }
             }
-        }
-        if (showDivider) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(c.divider)
-            )
+
+            // Por departamento
+            val depts = state.distributions.departments.filter { it.total > 0 }.sortedByDescending { it.total }
+            if (depts.isNotEmpty()) {
+                val max = depts.maxOf { it.total }
+                VdCard(padding = 12.dp) {
+                    Text("Por departamento", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.text, modifier = Modifier.padding(bottom = 6.dp))
+                    depts.take(6).forEach { d ->
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 3.dp)) {
+                            Text(d.label, fontSize = 11.sp, color = c.text, modifier = Modifier.width(90.dp), maxLines = 1)
+                            VdBar(d.total.toFloat() / max, c.primaryLight, Modifier.weight(1f))
+                            Text("${d.total}", fontSize = 11.sp, color = c.muted, modifier = Modifier.width(30.dp))
+                        }
+                    }
+                }
+            }
+
+            // Atividade recente
+            VdCard(padding = 12.dp) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
+                    Text("Tickets recentes", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.text, modifier = Modifier.weight(1f))
+                    Text("ver todos", fontSize = 11.sp, color = c.primary, modifier = Modifier.clickable(onClick = onSeeAllTickets))
+                }
+                if (dash.recentTickets.isEmpty()) Text("Nenhum ticket recente.", fontSize = 12.sp, color = c.muted, modifier = Modifier.padding(vertical = 8.dp))
+                dash.recentTickets.forEachIndexed { i, t ->
+                    val (stLabel, _) = ticketStatusVisual(t.status, null)
+                    val (bg, fg) = ticketStatusTint(stLabel)
+                    val (_, priColor) = ticketPriorityVisual(t.priority)
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onTicketClick(t.id) }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(Modifier.size(28.dp).background(c.surfaceAlt, CircleShape), contentAlignment = Alignment.Center) {
+                            Text(initialsOf(t.contactName), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF374151))
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(t.title ?: "Ticket #${t.id}", fontSize = 12.sp, color = c.text, maxLines = 1)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Box(Modifier.size(6.dp).background(priColor, CircleShape))
+                                Text(listOfNotNull(t.contactName, t.createdAt?.let { relativeTime(it) }).joinToString(" · "), fontSize = 10.sp, color = c.muted, maxLines = 1)
+                            }
+                        }
+                        VdTag(stLabel, color = fg, background = bg)
+                    }
+                    if (i < dash.recentTickets.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(c.surfaceAlt))
+                }
+            }
+            state.error?.let { Text(it, fontSize = 12.sp, color = c.danger) }
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
 
-private fun greeting(): String {
-    val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-    return when {
-        h < 12 -> "Bom dia"
-        h < 18 -> "Boa tarde"
-        else -> "Boa noite"
+private fun statusBar(fg: Color, index: Int): Color {
+    val palette = listOf(Color(0xFF3B82F6), Color(0xFFF59E0B), Color(0xFF22C55E), Color(0xFFEF4444), Color(0xFF7E3E97), Color(0xFF9CA3AF))
+    return when (fg) {
+        Tint.blueFg -> palette[0]; Tint.yellowFg -> palette[1]; Tint.greenFg -> palette[2]
+        Tint.redFg -> palette[3]; Color(0xFF7E3E97) -> palette[4]
+        else -> palette[index % palette.size]
     }
 }
 
-private fun todayLabel(): String {
-    val fmt = SimpleDateFormat("EEEE, d 'de' MMMM", Locale("pt", "BR"))
-    return fmt.format(Date()).replaceFirstChar { it.uppercase() }
+private fun periodLabel(period: String) = when (period) {
+    "today" -> "hoje"; "yesterday" -> "ontem"; "week" -> "semana"; "month" -> "mês"; else -> period
 }

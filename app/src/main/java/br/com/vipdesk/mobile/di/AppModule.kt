@@ -58,7 +58,8 @@ object AppContainer {
             .build()
     }
 
-    private val gson by lazy {
+    /** Gson do app (deserializadores tolerantes p/ User/Client/números). Use-o em vez de Gson() puro. */
+    val gson: com.google.gson.Gson by lazy {
         GsonBuilder()
             .registerTypeAdapter(User::class.java, FlexibleUserDeserializer())
             .registerTypeAdapter(Client::class.java, FlexibleClientDeserializer())

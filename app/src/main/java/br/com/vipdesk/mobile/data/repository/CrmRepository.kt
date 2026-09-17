@@ -4,6 +4,7 @@ import br.com.vipdesk.mobile.data.api.ApiService
 import br.com.vipdesk.mobile.data.model.ApiContact
 import br.com.vipdesk.mobile.data.model.ApiDeal
 import br.com.vipdesk.mobile.data.model.CloseDealRequest
+import br.com.vipdesk.mobile.data.model.ContactConversationSummary
 import br.com.vipdesk.mobile.data.model.CreateContactRequest
 import br.com.vipdesk.mobile.data.model.CreateDealRequest
 import br.com.vipdesk.mobile.data.model.CreateTicketRequest
@@ -95,19 +96,86 @@ class CrmRepository(private val apiService: ApiService) {
         }
     }
 
+    /** Contato por id (ContactResource do backend). */
+    suspend fun getContact(contactId: Int): Result<ApiContact> {
+        return try {
+            val response = apiService.getContact(contactId)
+            if (response.isSuccessful && response.body() != null) {
+                val json = response.body()!!
+                val obj = if (json.has("data") && json.get("data").isJsonObject) json.getAsJsonObject("data") else json
+                Result.success(br.com.vipdesk.mobile.di.AppContainer.gson.fromJson(obj, ApiContact::class.java))
+            } else {
+                Result.failure(Exception(errorMessage(response, "Contato não encontrado")))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** Conversas do contato (ids + resumo), tolerante ao formato do resource. */
+    suspend fun getContactConversations(contactId: Int): Result<List<ContactConversationSummary>> {
+        return try {
+            val response = apiService.getContactConversations(contactId)
+            if (!response.isSuccessful || response.body() == null) return Result.success(emptyList())
+            val root = response.body()!!
+            val arr = when {
+                root.isJsonArray -> root.asJsonArray
+                root.isJsonObject && root.asJsonObject.has("data") && root.asJsonObject.get("data").isJsonArray ->
+                    root.asJsonObject.getAsJsonArray("data")
+                else -> return Result.success(emptyList())
+            }
+            val list = arr.mapNotNull { el ->
+                val o = el.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
+                val id = o.get("id")?.takeIf { it.isJsonPrimitive }?.asInt ?: return@mapNotNull null
+                val last = o.get("last_message")?.takeIf { it.isJsonObject }?.asJsonObject
+                ContactConversationSummary(
+                    id = id,
+                    source = o.get("source")?.takeIf { it.isJsonPrimitive }?.asString,
+                    preview = last?.get("message")?.takeIf { it.isJsonPrimitive }?.asString,
+                    updatedAt = last?.get("created_at")?.takeIf { it.isJsonPrimitive }?.asString
+                        ?: o.get("updated_at")?.takeIf { it.isJsonPrimitive }?.asString
+                )
+            }
+            Result.success(list)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // ————— Negócios (deals) —————
 
-    suspend fun listDeals(search: String?, status: String?): Result<List<ApiDeal>> {
+    suspend fun listDeals(
+        search: String?,
+        status: String?,
+        pipelineId: Int? = null,
+        contactId: Int? = null,
+        kanban: Boolean = false
+    ): Result<List<ApiDeal>> {
         return try {
             val response = apiService.getDeals(
                 search = search?.ifBlank { null },
-                status = status?.ifBlank { null }
+                status = status?.ifBlank { null },
+                pipelineId = pipelineId,
+                contactId = contactId,
+                view = if (kanban) "kanban" else null,
+                take = if (kanban) 200 else 30
             )
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!.data)
             } else {
                 Result.failure(Exception(errorMessage(response, "Erro ao carregar negócios")))
             }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getDeal(dealId: Int): Result<ApiDeal> {
+        return try {
+            val response = apiService.getDeal(dealId)
+            val deal = response.body()?.data
+            if (response.isSuccessful && deal != null) Result.success(deal)
+            else Result.failure(Exception(errorMessage(response, "Negócio não encontrado")))
         } catch (e: Exception) {
             Result.failure(e)
         }

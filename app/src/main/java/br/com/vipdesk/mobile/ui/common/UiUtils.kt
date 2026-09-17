@@ -26,23 +26,28 @@ fun initialsOf(fullName: String): String {
         .ifBlank { "?" }
 }
 
-private fun parseFlexibleDate(dateStr: String): java.util.Date? {
-    val patterns = listOf(
-        "yyyy-MM-dd HH:mm:ss",
-        "yyyy-MM-dd'T'HH:mm:ssXXX",
-        "yyyy-MM-dd'T'HH:mm:ssZ",
-        "yyyy-MM-dd'T'HH:mm:ss",
-        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
-    )
-    for (p in patterns) {
+/**
+ * Datas da API: "yyyy-MM-dd HH:mm:ss" chega em horário local (America/Sao_Paulo);
+ * ISO-8601 com Z/offset (ex.: "2026-09-16T22:08:54.000000Z") é UTC e é convertido.
+ * Frações de segundo são descartadas antes do parse.
+ */
+fun parseApiDate(dateStr: String?): java.util.Date? {
+    if (dateStr.isNullOrBlank()) return null
+    val cleaned = dateStr.replace(Regex("\\.\\d+"), "")
+    val patterns = if (cleaned.contains('T'))
+        listOf("yyyy-MM-dd'T'HH:mm:ss'Z'" to true, "yyyy-MM-dd'T'HH:mm:ssXXX" to false, "yyyy-MM-dd'T'HH:mm:ss" to false)
+    else listOf("yyyy-MM-dd HH:mm:ss" to false, "yyyy-MM-dd" to false)
+    for ((p, utc) in patterns) {
         try {
-            val sdf = java.text.SimpleDateFormat(p, java.util.Locale("pt", "BR"))
-            return sdf.parse(dateStr) ?: continue
-        } catch (_: Exception) {
-        }
+            val fmt = java.text.SimpleDateFormat(p, java.util.Locale("pt", "BR"))
+            if (utc) fmt.timeZone = java.util.TimeZone.getTimeZone("UTC")
+            return fmt.parse(cleaned) ?: continue
+        } catch (_: Exception) {}
     }
     return null
 }
+
+private fun parseFlexibleDate(dateStr: String): java.util.Date? = parseApiDate(dateStr)
 
 fun relativeTime(dateStr: String): String {
     return try {

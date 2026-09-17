@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import br.com.vipdesk.mobile.data.local.TokenManager
 import br.com.vipdesk.mobile.data.model.MobileDashboard
+import br.com.vipdesk.mobile.data.model.StatisticsCountResponse
+import br.com.vipdesk.mobile.data.model.StatisticsResponse
 import br.com.vipdesk.mobile.data.repository.MobileRepository
 import br.com.vipdesk.mobile.data.socket.SocketEvent
 import br.com.vipdesk.mobile.data.socket.SocketService
@@ -19,6 +21,9 @@ data class DashboardUiState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val dashboard: MobileDashboard = MobileDashboard(),
+    val period: String = "today", // today | yesterday | week | month
+    val stats: StatisticsResponse = StatisticsResponse(),
+    val distributions: StatisticsCountResponse = StatisticsCountResponse(),
     val unreadNotifications: Int = 0,
     val error: String? = null
 )
@@ -92,6 +97,16 @@ class DashboardViewModel(
         }
     }
 
+    fun setPeriod(period: String) {
+        if (_uiState.value.period == period) return
+        _uiState.value = _uiState.value.copy(period = period)
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            fetchStats()
+            _uiState.value = _uiState.value.copy(isLoading = false)
+        }
+    }
+
     private suspend fun fetch() {
         mobileRepository.getDashboard().fold(
             onSuccess = {
@@ -101,6 +116,19 @@ class DashboardViewModel(
                 _uiState.value = _uiState.value.copy(error = it.message)
             }
         )
+        fetchStats()
+    }
+
+    /** Contadores e distribuições do período — mesmos dados do dashboard web. */
+    private suspend fun fetchStats() {
+        val period = _uiState.value.period
+        mobileRepository.getStatistics(period).fold(
+            onSuccess = { _uiState.value = _uiState.value.copy(stats = it) },
+            onFailure = { _uiState.value = _uiState.value.copy(error = it.message) }
+        )
+        mobileRepository.getStatisticsCount(period).onSuccess {
+            _uiState.value = _uiState.value.copy(distributions = it)
+        }
     }
 
     companion object {

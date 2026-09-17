@@ -198,7 +198,13 @@ class ConversationDetailViewModel(
                     }
                 }
 
-                conversationRepository.uploadFile(conversationId, tempFile, mimeType).fold(
+                val conv = _uiState.value.conversation
+                conversationRepository.sendFileMessage(
+                    conversationId, tempFile, mimeType,
+                    ticketId = conv?.activeTicket?.id,
+                    accountNumber = conv?.accountNumber,
+                    userName = AppContainer.tokenManager.getUserName()
+                ).fold(
                     onSuccess = {
                         _uiState.value = _uiState.value.copy(isSending = false)
                         loadAll()
@@ -206,13 +212,14 @@ class ConversationDetailViewModel(
                     onFailure = {
                         _uiState.value = _uiState.value.copy(
                             isSending = false,
-                            error = "Erro ao enviar arquivo"
+                            error = it.message ?: "Erro ao enviar arquivo"
                         )
                     }
                 )
 
                 tempFile.delete()
             } catch (e: Exception) {
+                android.util.Log.e("VipDeskUpload", "uploadFile failed", e)
                 _uiState.value = _uiState.value.copy(
                     isSending = false,
                     error = "Erro ao processar arquivo"
@@ -263,7 +270,8 @@ class ConversationDetailViewModel(
                 },
                 onFailure = {
                     _uiState.value = _uiState.value.copy(
-                        error = "Erro ao transferir atendimento"
+                        showTransferDialog = false,
+                        error = it.message ?: "Erro ao transferir atendimento"
                     )
                 }
             )
@@ -283,8 +291,58 @@ class ConversationDetailViewModel(
                 },
                 onFailure = {
                     _uiState.value = _uiState.value.copy(
-                        error = "Erro ao atribuir atendente"
+                        showAssignDialog = false,
+                        error = it.message ?: "Erro ao atribuir atendente"
                     )
+                }
+            )
+        }
+    }
+
+    /** Assume a conversa (atribui o ticket ativo ao usuário logado). */
+    fun assignToMe() {
+        val me = _uiState.value.currentUserId ?: return
+        assignToUser(me)
+    }
+
+    /** Finaliza o ticket ativo da conversa (mesmo endpoint do detalhe do ticket). */
+    fun resolveActiveTicket() {
+        val ticketId = _uiState.value.conversation?.activeTicket?.id ?: run {
+            _uiState.value = _uiState.value.copy(error = "Esta conversa não tem ticket ativo")
+            return
+        }
+        viewModelScope.launch {
+            AppContainer.mobileRepository.resolveTicket(ticketId).fold(
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(actionSuccess = "Ticket finalizado")
+                    loadAll()
+                },
+                onFailure = {
+                    _uiState.value = _uiState.value.copy(error = it.message ?: "Erro ao finalizar ticket")
+                }
+            )
+        }
+    }
+
+    /** Abre um ticket para o contato desta conversa. */
+    fun createTicket(title: String, priority: String?, onCreated: (Int) -> Unit) {
+        val contactId = _uiState.value.conversation?.contact?.id ?: return
+        viewModelScope.launch {
+            AppContainer.crmRepository.createTicket(
+                br.com.vipdesk.mobile.data.model.CreateTicketRequest(
+                    contactId = contactId,
+                    title = title,
+                    priority = priority,
+                    source = _uiState.value.conversation?.source ?: "whatsapp"
+                )
+            ).fold(
+                onSuccess = { ticket ->
+                    _uiState.value = _uiState.value.copy(actionSuccess = "Ticket criado")
+                    loadAll()
+                    ticket?.id?.let(onCreated)
+                },
+                onFailure = {
+                    _uiState.value = _uiState.value.copy(error = it.message ?: "Erro ao criar ticket")
                 }
             )
         }

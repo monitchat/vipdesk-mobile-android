@@ -34,6 +34,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -49,11 +52,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import br.com.vipdesk.mobile.di.AppContainer
 import androidx.lifecycle.viewmodel.compose.viewModel
 import br.com.vipdesk.mobile.ui.components.VdAvatar
 import br.com.vipdesk.mobile.ui.components.VdCard
 import br.com.vipdesk.mobile.ui.components.VdDivider
 import br.com.vipdesk.mobile.ui.components.VdSectionLabel
+import br.com.vipdesk.mobile.ui.components.VdSubHeader
 import br.com.vipdesk.mobile.ui.components.VdToast
 import br.com.vipdesk.mobile.ui.components.VdToggle
 import br.com.vipdesk.mobile.ui.theme.AppTheme
@@ -72,7 +77,15 @@ fun ProfileScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val c = AppTheme.colors
     val context = LocalContext.current
-    var online by remember { mutableStateOf(true) }
+    // Presença real (pausa): toggle desligado = em pausa (motivo via sheet)
+    val presence by br.com.vipdesk.mobile.data.session.PresenceState.state.collectAsState()
+    val online = !presence.paused
+    val scope = rememberCoroutineScope()
+    var showPause by remember { mutableStateOf(false) }
+    var quickCount by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(Unit) {
+        runCatching { AppContainer.apiService.getFastMessages() }.onSuccess { r -> if (r.isSuccessful) quickCount = r.body()?.data?.size }
+    }
     val prefs = remember {
         mutableStateMapOf(
             "Novas mensagens e conversas atribuídas" to true,
@@ -82,6 +95,7 @@ fun ProfileScreen(
         )
     }
     var toast by remember { mutableStateOf<String?>(null) }
+    if (showPause) br.com.vipdesk.mobile.ui.main.PauseReasonSheet(onDismiss = { showPause = false }, onResult = { toast = it })
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -91,27 +105,8 @@ fun ProfileScreen(
     }
 
     Box(Modifier.fillMaxSize().background(c.background)) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (onBack != null) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar", tint = c.textPrimary)
-                    }
-                } else {
-                    Spacer(Modifier.size(12.dp))
-                }
-                Text(
-                    "Perfil e configurações",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = c.textPrimary
-                )
-            }
+        Column(Modifier.fillMaxSize()) {
+            VdSubHeader(title = "Perfil e configurações", onBack = onBack ?: {})
 
             Column(
                 modifier = Modifier
@@ -170,12 +165,20 @@ fun ProfileScreen(
                                 Text("Disponível para atendimento", fontSize = 14.sp, color = c.textPrimary)
                                 Text(
                                     if (online) "Recebendo novas conversas"
-                                    else "Pausado — não recebe novas conversas",
+                                    else "Em pausa${presence.reason?.let { " · $it" } ?: ""} — não recebe novas conversas",
                                     fontSize = 11.5.sp,
                                     color = c.textSecondary
                                 )
                             }
-                            VdToggle(checked = online, onToggle = { online = !online })
+                            VdToggle(checked = online, onToggle = {
+                                if (online) showPause = true
+                                else scope.launch {
+                                    br.com.vipdesk.mobile.data.session.PresenceState.toggle(null, null).fold(
+                                        onSuccess = { toast = "Você está disponível novamente" },
+                                        onFailure = { toast = it.message ?: "Erro ao sair da pausa" }
+                                    )
+                                }
+                            })
                         }
                         VdDivider()
                         Row(
@@ -243,8 +246,8 @@ fun ProfileScreen(
                 // Outras configurações
                 VdCard(padding = 0.dp) {
                     Column(Modifier.padding(horizontal = 14.dp)) {
-                        SettingRow(Icons.Outlined.Bolt, "Respostas rápidas", "12 salvas") {
-                            toast = "Disponível na versão web"
+                        SettingRow(Icons.Outlined.Bolt, "Respostas rápidas", quickCount?.let { "$it salvas" } ?: "—") {
+                            toast = "Use o botão Templates no chat · cadastro na versão web"
                         }
                         SettingRow(Icons.Outlined.Draw, "Assinatura de mensagens", "Ativa") {
                             toast = "Disponível na versão web"
@@ -252,8 +255,8 @@ fun ProfileScreen(
                         SettingRow(Icons.Outlined.Translate, "Idioma", "Português (BR)") {
                             toast = "Disponível na versão web"
                         }
-                        SettingRow(Icons.Outlined.Info, "Sobre o VIPdesk", "v2.4.1", last = true) {
-                            toast = "Disponível na versão web"
+                        SettingRow(Icons.Outlined.Info, "Sobre o VIPdesk", "v${br.com.vipdesk.mobile.BuildConfig.VERSION_NAME}", last = true) {
+                            toast = "VIPdesk Mobile v${br.com.vipdesk.mobile.BuildConfig.VERSION_NAME}"
                         }
                     }
                 }

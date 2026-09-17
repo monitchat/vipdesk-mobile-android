@@ -46,6 +46,7 @@ import br.com.vipdesk.mobile.ui.common.relativeTime
 import br.com.vipdesk.mobile.ui.components.VdDivider
 import br.com.vipdesk.mobile.ui.components.VdEmptyState
 import br.com.vipdesk.mobile.ui.components.VdSectionLabel
+import br.com.vipdesk.mobile.ui.components.VdSubHeader
 import br.com.vipdesk.mobile.ui.theme.AppTheme
 import br.com.vipdesk.mobile.ui.theme.VdDanger
 import br.com.vipdesk.mobile.ui.theme.VdInfo
@@ -71,8 +72,7 @@ private fun kindVisual(kind: String): Pair<ImageVector, Color> = when (kind.lowe
 private fun groupLabel(createdAt: String?): String {
     if (createdAt == null) return "Anteriores"
     return try {
-        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("pt", "BR"))
-        val date = sdf.parse(createdAt) ?: return "Anteriores"
+        val date = br.com.vipdesk.mobile.ui.common.parseApiDate(createdAt) ?: return "Anteriores"
         val now = Calendar.getInstance()
         val then = Calendar.getInstance().apply { time = date }
         val minutes = (now.timeInMillis - then.timeInMillis) / 60000
@@ -100,41 +100,37 @@ fun NotificationsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(c.background)
-            .statusBarsPadding()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 4.dp, end = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar", tint = c.textPrimary)
-            }
-            Text(
-                "Notificações",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                color = c.textPrimary,
-                modifier = Modifier.weight(1f)
-            )
+        VdSubHeader(title = "Notificações", onBack = onBack, actions = {
             if (state.unreadCount > 0) {
                 Text(
                     "Marcar tudo como lido",
-                    fontSize = 12.5.sp,
-                    color = c.accent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.primary,
                     modifier = Modifier
                         .clickable { viewModel.markAllRead() }
-                        .padding(4.dp)
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
                 )
             }
-        }
+        })
 
         when {
             state.isLoading && state.items.isEmpty() -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = c.accent)
                 }
+            }
+            state.error != null && state.items.isEmpty() -> {
+                VdEmptyState(
+                    icon = Icons.Outlined.Notifications,
+                    title = "Não foi possível carregar",
+                    subtitle = state.error ?: "",
+                    iconTint = VdDanger,
+                    iconBg = VdDanger.copy(alpha = 0.12f),
+                    ctaLabel = "Tentar novamente",
+                    onCta = { viewModel.load() }
+                )
             }
             state.items.isEmpty() -> {
                 VdEmptyState(

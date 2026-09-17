@@ -48,7 +48,9 @@ import br.com.vipdesk.mobile.ui.components.VdCard
 import br.com.vipdesk.mobile.ui.components.VdKpiCard
 import br.com.vipdesk.mobile.ui.components.VdPill
 import br.com.vipdesk.mobile.ui.components.VdPillRow
+import br.com.vipdesk.mobile.ui.components.VdHeaderIcon
 import br.com.vipdesk.mobile.ui.components.VdSectionLabel
+import br.com.vipdesk.mobile.ui.components.VdSubHeader
 import br.com.vipdesk.mobile.ui.components.VdToast
 import br.com.vipdesk.mobile.ui.theme.AppTheme
 import br.com.vipdesk.mobile.ui.theme.VdDanger
@@ -71,30 +73,10 @@ fun ReportsScreen(onBack: () -> Unit) {
     }
 
     Box(Modifier.fillMaxSize().background(c.background)) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar", tint = c.textPrimary)
-                }
-                Text(
-                    "Relatórios",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = c.textPrimary,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = { toast = "Relatório exportado (PDF)" }) {
-                    Icon(
-                        Icons.Outlined.IosShare, "Exportar",
-                        tint = c.textSecondary, modifier = Modifier.size(19.dp)
-                    )
-                }
-            }
+        Column(Modifier.fillMaxSize()) {
+            VdSubHeader(title = "Relatórios", subtitle = "Dados de exemplo · em breve com a API", onBack = onBack, actions = {
+                VdHeaderIcon(Icons.Outlined.IosShare, "Exportar", { toast = "Exportação disponível na versão web" })
+            })
 
             VdPillRow(modifier = Modifier.padding(vertical = 10.dp)) {
                 PERIODS.forEach { p ->

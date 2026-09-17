@@ -56,13 +56,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.vipdesk.mobile.data.demo.DemoKanbanCard
 import br.com.vipdesk.mobile.ui.components.VdAvatar
+import br.com.vipdesk.mobile.ui.components.VdHeaderIcon
 import br.com.vipdesk.mobile.ui.components.VdOutlineButton
+import br.com.vipdesk.mobile.ui.components.VdSubHeader
 import br.com.vipdesk.mobile.ui.components.VdSheetRow
 import br.com.vipdesk.mobile.ui.components.VdTag
 import br.com.vipdesk.mobile.ui.components.VdToast
 import br.com.vipdesk.mobile.ui.theme.AppTheme
 import br.com.vipdesk.mobile.ui.theme.VdDanger
 import br.com.vipdesk.mobile.ui.theme.VdSuccess
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import br.com.vipdesk.mobile.ui.components.VdEmptyState
+import androidx.compose.material.icons.outlined.ViewKanban
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,9 +78,12 @@ fun KanbanScreen(
     onCardClick: (String) -> Unit
 ) {
     val c = AppTheme.colors
+    val scope = rememberCoroutineScope()
     val columns = KanbanStore.columns
     val total = columns.sumOf { it.cards.size }
     var toast by remember { mutableStateOf<String?>(null) }
+    var showBoards by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { if (KanbanStore.columns.isEmpty()) KanbanStore.load() }
     var menuCard by remember { mutableStateOf<DemoKanbanCard?>(null) }
     var showMove by remember { mutableStateOf(false) }
     var newTaskColumn by remember { mutableStateOf<String?>(null) }
@@ -86,37 +95,32 @@ fun KanbanScreen(
             toast = null
         }
     }
+    if (showBoards) BoardPickerSheet(onDismiss = { showBoards = false })
 
     Box(Modifier.fillMaxSize().background(c.background)) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar", tint = c.textPrimary)
+        Column(Modifier.fillMaxSize()) {
+            VdSubHeader(
+                title = KanbanStore.boardName,
+                subtitle = when {
+                    KanbanStore.loading -> "Carregando quadro…"
+                    KanbanStore.error != null -> KanbanStore.error
+                    else -> "Quadro da equipe · $total tarefas" + (if (KanbanStore.boards.size > 1) " · ${KanbanStore.boards.size} quadros" else "")
+                },
+                onBack = onBack,
+                actions = {
+                    if (KanbanStore.boards.size > 1) VdHeaderIcon(Icons.Outlined.ViewKanban, "Trocar quadro", { showBoards = true })
+                    VdHeaderIcon(Icons.Default.Add, "Nova tarefa", {
+                        if (columns.isEmpty()) { toast = KanbanStore.error ?: "Quadro sem colunas" } else {
+                            newTaskTitle = ""
+                            newTaskColumn = columns.getOrNull(1)?.name ?: columns.first().name
+                        }
+                    }, tint = c.primary)
                 }
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "Operações CS",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = c.textPrimary
-                    )
-                    Text(
-                        "Quadro da equipe · $total tarefas",
-                        fontSize = 11.sp,
-                        color = c.textSecondary
-                    )
-                }
-                IconButton(onClick = {
-                    newTaskTitle = ""
-                    newTaskColumn = columns.getOrNull(1)?.name ?: columns.first().name
-                }) {
-                    Icon(Icons.Default.Add, "Nova tarefa", tint = c.accent)
-                }
+            )
+            if (KanbanStore.error != null && columns.isEmpty()) {
+                VdEmptyState(Icons.Outlined.ViewKanban, "Não foi possível carregar", KanbanStore.error ?: "", ctaLabel = "Tentar novamente", onCta = { scope.launch { KanbanStore.load() } })
+            } else if (!KanbanStore.loading && columns.isEmpty()) {
+                VdEmptyState(Icons.Outlined.ViewKanban, "Nenhum quadro", "Crie um quadro de tarefas na versão web para usá-lo aqui.")
             }
 
             Row(
@@ -227,21 +231,25 @@ fun KanbanScreen(
                 VdSheetRow(Icons.Outlined.SwapHoriz, "Mover para…", iconTint = c.accent, onClick = {
                     showMove = true
                 })
-                VdSheetRow(Icons.Outlined.PersonAddAlt, "Atribuir responsável", onClick = {
+                VdSheetRow(Icons.Outlined.PersonAddAlt, "Atribuir responsável", trailing = "versão web", onClick = {
                     menuCard = null
-                    toast = "Responsável atualizado"
+                    toast = "Atribuição de responsável disponível na versão web"
                 })
                 VdSheetRow(Icons.Outlined.ContentCopy, "Duplicar cartão", onClick = {
+                    val colName = KanbanStore.columnOf(card.id)?.name ?: columns.first().name
                     menuCard = null
-                    toast = "Cartão duplicado"
+                    scope.launch {
+                        KanbanStore.addCard(card.title, colName, card.customer, card.labels.firstOrNull()).fold({ toast = "Cartão duplicado" }, { toast = it.message })
+                    }
                 })
                 VdSheetRow(
                     Icons.Outlined.Archive, "Arquivar",
                     iconTint = VdDanger, textColor = VdDanger,
                     onClick = {
-                        KanbanStore.archive(card.id)
                         menuCard = null
-                        toast = "Cartão arquivado"
+                        scope.launch {
+                            KanbanStore.archive(card.id).fold({ toast = "Cartão arquivado" }, { toast = it.message })
+                        }
                     }
                 )
                 Spacer(Modifier.height(28.dp))
@@ -289,9 +297,11 @@ fun KanbanScreen(
                     label = "Criar tarefa",
                     enabled = newTaskTitle.isNotBlank(),
                     onClick = {
-                        KanbanStore.addCard(newTaskTitle.trim(), targetColumn, "", null)
+                        val t = newTaskTitle.trim()
                         newTaskColumn = null
-                        toast = "Tarefa criada em \"$targetColumn\""
+                        scope.launch {
+                            KanbanStore.addCard(t, targetColumn, "", null).fold({ toast = "Tarefa criada em \"$targetColumn\"" }, { toast = it.message })
+                        }
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -321,10 +331,11 @@ fun KanbanScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                KanbanStore.move(card.id, col.name)
                                 showMove = false
                                 menuCard = null
-                                toast = "Movida para ${col.name}"
+                                scope.launch {
+                                    KanbanStore.move(card.id, col.name).fold({ toast = "Movida para ${col.name}" }, { toast = it.message })
+                                }
                             }
                             .padding(horizontal = 4.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -340,6 +351,28 @@ fun KanbanScreen(
                     }
                 }
                 Spacer(Modifier.height(28.dp))
+            }
+        }
+    }
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BoardPickerSheet(onDismiss: () -> Unit) {
+    val c = AppTheme.colors
+    val scope = rememberCoroutineScope()
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = c.surface) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 28.dp)) {
+            Text("Quadros", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.textPrimary, modifier = Modifier.padding(bottom = 6.dp))
+            KanbanStore.boards.forEach { b ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { onDismiss(); scope.launch { KanbanStore.selectBoard(b.id) } }.padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(b.name, fontSize = 14.sp, color = if (b.id == KanbanStore.boardId) c.primary else c.textPrimary, modifier = Modifier.weight(1f))
+                    Text("${b.tasksCount} tarefas", fontSize = 11.sp, color = c.textSecondary)
+                }
             }
         }
     }
@@ -409,7 +442,7 @@ private fun KanbanCardItem(
                 card.dueDone -> VdSuccess
                 else -> c.textSecondary
             }
-            Row(
+            if (card.due.isNotBlank()) Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -435,7 +468,7 @@ private fun KanbanCardItem(
                 }
             }
             Spacer(Modifier.weight(1f))
-            VdAvatar(name = card.assignee, size = 24.dp, fontSize = 9)
+            if (card.assignee.isNotBlank()) VdAvatar(name = card.assignee, size = 24.dp, fontSize = 9)
         }
     }
 }

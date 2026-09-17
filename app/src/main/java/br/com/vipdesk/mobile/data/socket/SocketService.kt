@@ -43,6 +43,7 @@ class SocketService(
     private var pusher: Pusher? = null
     private var companyChannel: String? = null
     private var userChannel: String? = null
+    private var sessionKey: String? = null
 
     private val _events = MutableSharedFlow<SocketEvent>(extraBufferCapacity = 50)
     val events: SharedFlow<SocketEvent> = _events.asSharedFlow()
@@ -51,7 +52,12 @@ class SocketService(
         private set
 
     fun connect(companyId: Int, userId: Int) {
+        // MainShell e ConversationListViewModel chamam connect() no mesmo instante do login;
+        // `isConnected` ainda é false durante o handshake, então a chave da sessão é o guarda.
+        val key = "$companyId:$userId"
+        if (pusher != null && sessionKey == key) return
         if (pusher != null) disconnect()
+        sessionKey = key
 
         val token = runBlocking { tokenManager.getToken() } ?: return
 
@@ -166,6 +172,7 @@ class SocketService(
         userChannel?.let { pusher?.unsubscribe(it) }
         pusher?.disconnect()
         pusher = null
+        sessionKey = null
         isConnected = false
         companyChannel = null
         userChannel = null

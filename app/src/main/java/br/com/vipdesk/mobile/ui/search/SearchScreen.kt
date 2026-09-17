@@ -41,7 +41,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import br.com.vipdesk.mobile.data.demo.DEMO_CONTACTS
+import br.com.vipdesk.mobile.data.model.ApiContact
 import br.com.vipdesk.mobile.data.demo.DEMO_RECENT_SEARCHES
 import br.com.vipdesk.mobile.data.model.TicketListItem
 import br.com.vipdesk.mobile.di.AppContainer
@@ -63,6 +63,7 @@ fun SearchScreen(
     val c = AppTheme.colors
     var query by remember { mutableStateOf("") }
     var tickets by remember { mutableStateOf<List<TicketListItem>>(emptyList()) }
+    var contacts by remember { mutableStateOf<List<ApiContact>>(emptyList()) }
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -70,15 +71,13 @@ fun SearchScreen(
     LaunchedEffect(query) {
         if (query.isBlank()) {
             tickets = emptyList()
+            contacts = emptyList()
             return@LaunchedEffect
         }
         delay(400)
         AppContainer.mobileRepository.getTickets("all", query).onSuccess { tickets = it }
+        AppContainer.crmRepository.searchContacts(query, take = 4).onSuccess { contacts = it }
     }
-
-    val contacts = if (query.isBlank()) emptyList() else DEMO_CONTACTS.filter {
-        "${it.name} ${it.company}".contains(query, ignoreCase = true)
-    }.take(4)
 
     Column(
         modifier = Modifier
@@ -183,7 +182,10 @@ fun SearchScreen(
                                         fontWeight = FontWeight.Medium,
                                         color = c.textPrimary
                                     )
-                                    Text(contact.company, fontSize = 11.5.sp, color = c.textSecondary)
+                                    Text(
+                                        listOfNotNull(contact.client?.name, contact.phoneNumber ?: contact.email).joinToString(" · "),
+                                        fontSize = 11.5.sp, color = c.textSecondary
+                                    )
                                 }
                             }
                             VdDivider()

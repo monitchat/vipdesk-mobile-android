@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../api-v2"
+		},
+		{
+			"path": "../vipdesk-front"
+		}
+	],
+	"settings": {}
+}

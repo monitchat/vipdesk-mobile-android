@@ -9,6 +9,7 @@ import br.com.vipdesk.mobile.data.model.ConversationCountResponse
 import br.com.vipdesk.mobile.data.repository.AuthRepository
 import br.com.vipdesk.mobile.data.repository.ConversationRepository
 import br.com.vipdesk.mobile.data.local.TokenManager
+import br.com.vipdesk.mobile.data.session.SessionEvents
 import br.com.vipdesk.mobile.data.socket.SocketEvent
 import br.com.vipdesk.mobile.data.socket.SocketService
 import br.com.vipdesk.mobile.di.AppContainer
@@ -77,8 +78,9 @@ class ConversationListViewModel(
                         silentRefresh()
                     }
                     is SocketEvent.UserLoggedOut -> {
-                        // Force logout
-                        authRepository.logout()
+                        // Servidor encerrou a sessão (logout automático/admin): o NavGraph
+                        // limpa a sessão e leva ao login.
+                        SessionEvents.expire("Sessão encerrada pelo servidor. Entre novamente.")
                     }
                     else -> { }
                 }

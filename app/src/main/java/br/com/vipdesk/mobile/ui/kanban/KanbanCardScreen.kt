@@ -34,6 +34,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +55,8 @@ import br.com.vipdesk.mobile.ui.components.VdAvatar
 import br.com.vipdesk.mobile.ui.components.VdBar
 import br.com.vipdesk.mobile.ui.components.VdCard
 import br.com.vipdesk.mobile.ui.components.VdDivider
+import br.com.vipdesk.mobile.ui.components.VdHeaderIcon
+import br.com.vipdesk.mobile.ui.components.VdSubHeader
 import br.com.vipdesk.mobile.ui.components.VdOutlineButton
 import br.com.vipdesk.mobile.ui.components.VdSectionLabel
 import br.com.vipdesk.mobile.ui.components.VdTag
@@ -66,6 +70,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun KanbanCardScreen(cardId: String, onBack: () -> Unit) {
     val c = AppTheme.colors
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(cardId) { if (KanbanStore.columns.isEmpty()) KanbanStore.load(); KanbanStore.loadChecklist(cardId); KanbanStore.loadComments(cardId) }
     val column = KanbanStore.columnOf(cardId)
     val card = column?.cards?.find { it.id == cardId }
     var toast by remember { mutableStateOf<String?>(null) }
@@ -88,26 +94,13 @@ fun KanbanCardScreen(cardId: String, onBack: () -> Unit) {
     val done = checklist.count { it.done }
 
     Box(Modifier.fillMaxSize().background(c.background)) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar", tint = c.textPrimary)
-                }
-                Text(
-                    "Operações CS · ${column.name}",
-                    fontSize = 12.5.sp,
-                    color = c.textSecondary,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = { showMove = true }) {
-                    Icon(Icons.Default.MoreHoriz, "Menu", tint = c.textPrimary)
-                }
-            }
+        Column(Modifier.fillMaxSize()) {
+            VdSubHeader(
+                title = "${KanbanStore.boardName} › ${column.name}",
+                breadcrumb = true,
+                onBack = onBack,
+                actions = { VdHeaderIcon(Icons.Default.MoreHoriz, "Menu", { showMove = true }) }
+            )
 
             Column(
                 modifier = Modifier
@@ -135,7 +128,7 @@ fun KanbanCardScreen(cardId: String, onBack: () -> Unit) {
                         FieldRow("Prazo", card.due, if (card.dueUrgent) VdDanger else c.textPrimary)
                         FieldRow(
                             "Prioridade",
-                            if (card.dueUrgent) "Urgente" else "Normal",
+                            when (KanbanStore.priorityOf(card.id)) { "urgent" -> "Urgente"; "high" -> "Alta"; "low" -> "Baixa"; else -> "Normal" },
                             if (card.dueUrgent) VdDanger else c.textPrimary
                         )
                         FieldRow("Cliente", card.customer.ifBlank { "—" }, c.textPrimary, last = true)
@@ -168,7 +161,7 @@ fun KanbanCardScreen(cardId: String, onBack: () -> Unit) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(6.dp))
-                                .clickable { KanbanStore.toggleChecklist(i) }
+                                .clickable { scope.launch { KanbanStore.toggleChecklist(i) } }
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -192,25 +185,19 @@ fun KanbanCardScreen(cardId: String, onBack: () -> Unit) {
                 // Comentários
                 VdCard {
                     VdSectionLabel("Comentários", Modifier.padding(bottom = 8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        VdAvatar(name = "Ana Beatriz", size = 30.dp, fontSize = 11)
-                        Column(Modifier.weight(1f)) {
-                            Row {
-                                Text(
-                                    "Ana Beatriz",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = c.textPrimary
-                                )
-                                Text(" · há 40 min", fontSize = 12.sp, color = c.textSecondary)
+                    if (KanbanStore.comments.isEmpty()) {
+                        Text("Nenhum comentário ainda.", fontSize = 12.sp, color = c.textSecondary)
+                    }
+                    KanbanStore.comments.forEach { cm ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                            VdAvatar(name = cm.author, size = 30.dp, fontSize = 11)
+                            Column(Modifier.weight(1f)) {
+                                Row {
+                                    Text(cm.author, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.textPrimary)
+                                    cm.createdAt?.let { Text(" · ${br.com.vipdesk.mobile.ui.common.relativeTime(it)}", fontSize = 12.sp, color = c.textSecondary) }
+                                }
+                                Text(cm.body, fontSize = 13.5.sp, lineHeight = 19.sp, color = c.textPrimary, modifier = Modifier.padding(top = 2.dp))
                             }
-                            Text(
-                                "Transportadora confirmou o extravio. Podemos reenviar pelo motoboy parceiro hoje ainda.",
-                                fontSize = 13.5.sp,
-                                lineHeight = 19.sp,
-                                color = c.textPrimary,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
                         }
                     }
                     Spacer(Modifier.height(12.dp))
@@ -243,8 +230,8 @@ fun KanbanCardScreen(cardId: String, onBack: () -> Unit) {
                                 .size(17.dp)
                                 .clickable {
                                     if (comment.isNotBlank()) {
-                                        comment = ""
-                                        toast = "Comentário adicionado"
+                                        val body = comment.trim(); comment = ""
+                                        scope.launch { KanbanStore.addComment(card.id, body).fold({ toast = "Comentário adicionado" }, { toast = it.message }) }
                                     }
                                 }
                         )
@@ -264,8 +251,8 @@ fun KanbanCardScreen(cardId: String, onBack: () -> Unit) {
                         color = VdSuccess,
                         background = VdSuccess.copy(alpha = 0.12f),
                         onClick = {
-                            KanbanStore.move(card.id, "Concluído")
-                            onBack()
+                            val doneCol = KanbanStore.columns.lastOrNull()?.name ?: "Concluído"
+                            scope.launch { KanbanStore.move(card.id, doneCol).fold({ onBack() }, { toast = it.message }) }
                         },
                         modifier = Modifier.weight(1f)
                     )
@@ -303,9 +290,8 @@ fun KanbanCardScreen(cardId: String, onBack: () -> Unit) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                KanbanStore.move(card.id, col.name)
                                 showMove = false
-                                toast = "Movida para ${col.name}"
+                                scope.launch { KanbanStore.move(card.id, col.name).fold({ toast = "Movida para ${col.name}" }, { toast = it.message }) }
                             }
                             .padding(horizontal = 4.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,

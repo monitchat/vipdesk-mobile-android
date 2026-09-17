@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -126,7 +127,7 @@ private fun NovaConversaContent(
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
 
-    Column(Modifier.padding(horizontal = 16.dp)) {
+    Column(Modifier.padding(horizontal = 16.dp).imePadding()) {
         SheetTitle("Nova conversa", "Escolha o contato para abrir a conversa")
         ContactPicker(enabled = !busy) { contact ->
             busy = true
@@ -171,7 +172,7 @@ private fun NovoContatoContent(
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    Column(Modifier.padding(horizontal = 16.dp)) {
+    Column(Modifier.padding(horizontal = 16.dp).imePadding()) {
         SheetTitle("Novo contato", "Adicionar pessoa ao CRM")
         FormField("Nome", name, { name = it }, "Nome completo")
         Spacer(Modifier.height(10.dp))
@@ -200,6 +201,7 @@ private fun NovoContatoContent(
                             AppContainer.crmRepository.createContact(name.trim(), phone, email).fold(
                                 onSuccess = {
                                     busy = false
+                                    br.com.vipdesk.mobile.ui.crm.CrmEvents.contactsVersion++
                                     onDismiss()
                                     onToast("Contato criado no CRM")
                                 },
@@ -249,7 +251,7 @@ private fun NovoDealContent(
         )
     }
 
-    Column(Modifier.padding(horizontal = 16.dp)) {
+    Column(Modifier.padding(horizontal = 16.dp).imePadding()) {
         SheetTitle("Novo negócio", "Criar oportunidade no funil de vendas")
 
         val chosen = contact
@@ -414,7 +416,7 @@ private fun NovoTicketContent(
         AppContainer.crmRepository.getDepartments().onSuccess { departments = it }
     }
 
-    Column(Modifier.padding(horizontal = 16.dp)) {
+    Column(Modifier.padding(horizontal = 16.dp).imePadding()) {
         SheetTitle("Novo ticket", "Abrir chamado de suporte")
 
         val chosen = contact
@@ -528,14 +530,18 @@ private fun NovaTarefaContent(
     onOpenKanban: () -> Unit,
     onToast: (String) -> Unit
 ) {
+    val scope = rememberCoroutineScope()
     var title by remember { mutableStateOf("") }
     var customer by remember { mutableStateOf("") }
     var label by remember { mutableStateOf("") }
-    var column by remember { mutableStateOf(KanbanStore.columns.getOrNull(1)?.name ?: KanbanStore.columns.first().name) }
     var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { if (KanbanStore.columns.isEmpty()) KanbanStore.load() }
+    val columns = KanbanStore.columns
+    var column by remember(columns) { mutableStateOf(columns.getOrNull(1)?.name ?: columns.firstOrNull()?.name ?: "") }
 
-    Column(Modifier.padding(horizontal = 16.dp)) {
-        SheetTitle("Nova tarefa", "Criar cartão no quadro Operações CS")
+    Column(Modifier.padding(horizontal = 16.dp).imePadding()) {
+        SheetTitle("Nova tarefa", "Criar cartão no quadro ${KanbanStore.boardName}")
+        if (columns.isEmpty()) Text(KanbanStore.error ?: "Carregando quadro…", fontSize = 12.sp, color = AppTheme.colors.muted, modifier = Modifier.padding(bottom = 8.dp))
         FormField("Título", title, { title = it }, "O que precisa ser feito?")
         Spacer(Modifier.height(10.dp))
         FormField("Cliente (opcional)", customer, { customer = it }, "Nome do cliente")
@@ -562,10 +568,14 @@ private fun NovaTarefaContent(
                 if (title.isBlank()) {
                     error = "Informe o título da tarefa"
                 } else {
-                    KanbanStore.addCard(title.trim(), column, customer.trim(), label.trim())
+                    val t = title.trim(); val cu = customer.trim(); val la = label.trim()
                     onDismiss()
-                    onToast("Tarefa criada em \"$column\"")
-                    onOpenKanban()
+                    scope.launch {
+                        KanbanStore.addCard(t, column, cu, la).fold(
+                            { onToast("Tarefa criada em \"$column\""); onOpenKanban() },
+                            { onToast(it.message ?: "Erro ao criar tarefa") }
+                        )
+                    }
                 }
             },
             modifier = Modifier.fillMaxWidth()

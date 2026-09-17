@@ -10,9 +10,25 @@ data class LoginRequest(
 )
 
 data class LoginResponse(
-    @SerializedName("access_token") val token: String,
-    val user: User? = null
+    @SerializedName("access_token") val token: String? = null,
+    val user: User? = null,
+    // Usuário com MFA: o login responde 200 sem token e com estes campos;
+    // o token vem só depois de POST auth/mfa/verify.
+    @SerializedName("mfa_required") val mfaRequired: Boolean = false,
+    @SerializedName("mfa_token") val mfaToken: String? = null,
+    @SerializedName("mfa_method") val mfaMethod: String? = null,
+    @SerializedName("email_hint") val emailHint: String? = null
 )
+
+data class MfaVerifyRequest(
+    @SerializedName("mfa_token") val mfaToken: String,
+    val code: String
+)
+
+data class MfaResendRequest(@SerializedName("mfa_token") val mfaToken: String)
+
+/** Desafio MFA pendente após e-mail/senha válidos. */
+data class MfaChallenge(val token: String, val method: String, val emailHint: String?)
 
 data class User(
     val id: Int,
@@ -23,6 +39,9 @@ data class User(
     @SerializedName("department_id") val departmentId: Int? = null,
     val role: String? = null
 )
+
+/** Motivo de pausa (GET interruption-type). */
+data class InterruptionType(val id: Int, val name: String? = null, val active: Int? = 1)
 
 // ============ CONVERSATION ============
 
@@ -115,6 +134,13 @@ data class SendMessageRequest(
     val source: String? = null
 )
 
+/** Mensagem rápida (GET fast-message). Variáveis {greeting}/{contact_name} são trocadas pelo backend no envio. */
+data class FastMessage(
+    val id: Int,
+    val title: String? = null,
+    val message: String? = null
+)
+
 // ============ TICKET ============
 
 data class Ticket(
@@ -135,21 +161,41 @@ data class Ticket(
     @SerializedName("updated_at") val updatedAt: String? = null
 )
 
+// setTicketOwner/setTicketStatus leem `data` (ids separados por vírgula), como o web:
+// `{ data: ticket.id, user_id }` — com `ticket_id` o backend devolvia 200 sem alterar nada.
 data class ChangeOwnerRequest(
-    @SerializedName("ticket_id") val ticketId: Int,
+    @SerializedName("data") val ticketIds: String,
     @SerializedName("user_id") val userId: Int
-)
+) {
+    constructor(ticketId: Int, userId: Int) : this(ticketId.toString(), userId)
+}
 
 data class ChangeStatusRequest(
-    @SerializedName("ticket_id") val ticketId: Int,
-    val status: String
+    @SerializedName("data") val ticketIds: String,
+    val status: String,
+    // Obrigatório quando o status pausa o SLA (pause_sla)
+    @SerializedName("pending_reason") val pendingReason: String? = null
+) {
+    constructor(ticketId: Int, status: String) : this(ticketId.toString(), status)
+}
+
+/** Status de ticket da empresa (GET ticket-status). */
+data class TicketStatusOption(
+    val id: Int,
+    val description: String? = null,
+    @SerializedName("progress_percentage") val progressPercentage: Int? = null,
+    @SerializedName("pause_sla") val pauseSla: Boolean? = false,
+    val active: Int? = 1,
+    @SerializedName("is_system_status") val isSystemStatus: Int? = 0,
+    @SerializedName("menu_order") val menuOrder: Int? = null
 )
 
 // ============ COMMENT ============
 
 data class Comment(
     val id: Int? = null,
-    val message: String? = null,
+    // O backend serializa o texto como "comment" (Comment::create) — "message" é legado.
+    @SerializedName(value = "message", alternate = ["comment"]) val message: String? = null,
     @SerializedName("user_id") val userId: Int? = null,
     @SerializedName("ticket_id") val ticketId: Int? = null,
     @SerializedName("conversation_id") val conversationId: Int? = null,
@@ -157,10 +203,18 @@ data class Comment(
     @SerializedName("created_at") val createdAt: String? = null
 )
 
+// Mesmo payload do web (FormMesage.js): CommentController faz Comment::create(request()->all()),
+// então user_id, comment, path, source e comment_type precisam ir no corpo.
 data class SendCommentRequest(
     val message: String,
     @SerializedName("ticket_id") val ticketId: Int? = null,
-    @SerializedName("conversation_id") val conversationId: Int? = null
+    @SerializedName("conversation_id") val conversationId: Int? = null,
+    @SerializedName("user_id") val userId: Int? = null,
+    val comment: String = message,
+    val path: Int = 1,
+    val source: String = "comment",
+    @SerializedName("comment_type") val commentType: Int = 0,
+    @SerializedName("is_internal") val isInternal: Boolean = true
 )
 
 // ============ DEPARTMENT ============
@@ -264,6 +318,55 @@ data class RecentTicket(
     @SerializedName("updated_at") val updatedAt: String? = null
 )
 
+// ============ AGENDA ============
+
+data class Appointment(
+    val id: Int,
+    val type: String? = "service",
+    val title: String? = null,
+    val contact: String? = null,
+    @SerializedName("contact_id") val contactId: Int? = null,
+    @SerializedName("phone_number") val phoneNumber: String? = null,
+    val professional: String? = null,
+    @SerializedName("professional_id") val professionalId: Int? = null,
+    val service: String? = null,
+    @SerializedName("start_date") val startDate: String? = null,
+    @SerializedName("end_date") val endDate: String? = null,
+    val status: String? = null,           // pending | confirmed | arrived | in_service | completed | canceled | no_show
+    val notes: String? = null,
+    val price: Double? = null,
+    @SerializedName("payment_status") val paymentStatus: String? = null
+)
+
+data class AppointmentListResponse(val data: List<Appointment> = emptyList())
+
+// ============ ESTATÍSTICAS (mesmos endpoints do dashboard web) ============
+
+data class StatBucket(val count: Int = 0)
+
+data class StatisticsResponse(
+    @SerializedName("openTickets") val openTickets: StatBucket = StatBucket(),
+    @SerializedName("assignedTickets") val assignedTickets: StatBucket = StatBucket(),
+    @SerializedName("waitingTickets") val waitingTickets: StatBucket = StatBucket(),
+    @SerializedName("ignoredTickets") val ignoredTickets: StatBucket = StatBucket(),
+    @SerializedName("closedTickets") val closedTickets: StatBucket = StatBucket()
+)
+
+data class StatNamedTotal(
+    val name: String? = null,
+    val description: String? = null,
+    val source: String? = null,
+    val total: Int = 0
+) {
+    val label: String get() = name ?: description ?: source ?: "Sem categoria"
+}
+
+data class StatisticsCountResponse(
+    val departments: List<StatNamedTotal> = emptyList(),
+    val status: List<StatNamedTotal> = emptyList(),
+    val source: List<StatNamedTotal> = emptyList()
+)
+
 data class MobileNotificationsEnvelope(
     val data: List<MobileNotification> = emptyList(),
     @SerializedName("unread_count") val unreadCount: Int = 0
@@ -324,7 +427,19 @@ data class ApiContact(
     val name: String = "",
     val email: String? = null,
     @SerializedName("phone_number") val phoneNumber: String? = null,
-    val city: String? = null
+    val city: String? = null,
+    val client: Client? = null,
+    val source: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null,
+    val cpf: String? = null,
+    val address: String? = null
+)
+
+data class ContactConversationSummary(
+    val id: Int,
+    val source: String? = null,
+    val preview: String? = null,
+    val updatedAt: String? = null
 )
 
 data class ContactListResponse(
@@ -383,11 +498,19 @@ data class ApiDeal(
     val currency: String? = "BRL",
     val status: String? = "open",
     val stage: DealStage? = null,
+    @SerializedName("stage_id") val stageId: Int? = null,
     val pipeline: DealPipeline? = null,
+    @SerializedName("pipeline_id") val pipelineId: Int? = null,
     val contact: ApiContact? = null,
+    val client: Client? = null,
     val owner: User? = null,
+    val description: String? = null,
+    val source: String? = null,
     @SerializedName("expected_close_date") val expectedCloseDate: String? = null,
-    @SerializedName("created_at") val createdAt: String? = null
+    @SerializedName("created_at") val createdAt: String? = null,
+    @SerializedName("updated_at") val updatedAt: String? = null,
+    @SerializedName("closed_at") val closedAt: String? = null,
+    @SerializedName("last_activity_at") val lastActivityAt: String? = null
 )
 
 data class DealListResponse(
