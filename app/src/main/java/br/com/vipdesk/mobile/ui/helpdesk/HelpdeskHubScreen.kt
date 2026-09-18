@@ -59,7 +59,6 @@ import br.com.vipdesk.mobile.ui.components.VdSectionLabel
 import br.com.vipdesk.mobile.ui.theme.AppTheme
 import br.com.vipdesk.mobile.ui.theme.Tint
 
-private const val WEB_ONLY = "Disponível na versão web"
 
 /** Hub do Helpdesk (tela 13): KPIs, grade de operação e lista de gestão. */
 @Composable
@@ -72,7 +71,8 @@ fun HelpdeskHubScreen(
     onNotifications: () -> Unit,
     onCreateTicket: () -> Unit,
     onToast: (String) -> Unit,
-    unreadNotifications: Int = 0
+    unreadNotifications: Int = 0,
+    onOpenModule: (String) -> Unit = {}
 ) {
     val c = AppTheme.colors
     // null = ainda não carregou (ou falhou): os KPIs mostram "—" em vez de zeros falsos.
@@ -145,24 +145,24 @@ fun HelpdeskHubScreen(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OpCard(Icons.Outlined.ViewKanban, "Boards Kanban", "${br.com.vipdesk.mobile.ui.kanban.KanbanStore.boards.size} board(s)", modifier = Modifier.weight(1f), onClick = onOpenKanban)
-                OpCard(Icons.Outlined.Phone, "Ligações", "histórico · métricas", modifier = Modifier.weight(1f)) { onToast(WEB_ONLY) }
+                OpCard(Icons.Outlined.Phone, "Ligações", "histórico · gravações", modifier = Modifier.weight(1f)) { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.CALLS) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OpCard(Icons.Outlined.MenuBook, "Base de Conhecimento", "artigos", modifier = Modifier.weight(1f)) { onToast(WEB_ONLY) }
-                OpCard(Icons.Outlined.Approval, "Aprovações", "aguardando você", modifier = Modifier.weight(1f)) { onToast(WEB_ONLY) }
+                OpCard(Icons.Outlined.MenuBook, "Base de Conhecimento", "artigos", modifier = Modifier.weight(1f)) { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.KB) }
+                OpCard(Icons.Outlined.Approval, "Aprovações", "aguardando você", modifier = Modifier.weight(1f)) { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.APPROVALS) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OpCard(Icons.Outlined.Devices, "Inventário", "ativos · licenças · CMDB", modifier = Modifier.weight(1f)) { onToast(WEB_ONLY) }
-                OpCard(Icons.Outlined.WorkHistory, "Aprovar horas", "worklogs da equipe", modifier = Modifier.weight(1f)) { onToast(WEB_ONLY) }
+                OpCard(Icons.Outlined.Devices, "Inventário", "ativos · licenças · CMDB", modifier = Modifier.weight(1f)) { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.ASSETS) }
+                OpCard(Icons.Outlined.WorkHistory, "Aprovar horas", "worklogs da equipe", modifier = Modifier.weight(1f)) { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.HOURS) }
             }
 
             VdSectionLabel("Gestão")
             VdCard(padding = 0.dp) {
                 ManageRow(Icons.Outlined.Speed, "Dashboard", onClick = onOpenDashboard)
                 ManageRow(Icons.Outlined.BarChart, "Relatórios de service desk", onClick = onOpenReports)
-                ManageRow(Icons.Outlined.Mood, "Análise de sentimento (XLA)", tag = "IA") { onToast(WEB_ONLY) }
-                ManageRow(Icons.Outlined.Timer, "SLA por prioridade · Categorias") { onToast(WEB_ONLY) }
-                ManageRow(Icons.Outlined.Work, "Projetos", last = true) { onToast(WEB_ONLY) }
+                ManageRow(Icons.Outlined.Mood, "Análise de sentimento (XLA)", tag = "IA") { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.SENTIMENT) }
+                ManageRow(Icons.Outlined.Timer, "SLA por prioridade · Categorias") { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.SLA) }
+                ManageRow(Icons.Outlined.Work, "Projetos", last = true) { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.PROJECTS) }
             }
 
             // Atalho: criar ticket

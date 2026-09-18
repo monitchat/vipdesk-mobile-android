@@ -25,7 +25,12 @@ class ConversationRepository(private val apiService: ApiService) {
         return try {
             val params = mutableMapOf<String, String>()
             params["filter"] = """[["archived","=",0]]"""
-            params["status"] = status.ifEmpty { "all" }
+            // O backend ignora `status`; "Minhas" = user_id do agente, "Fila" = user_id=-1
+            // (ticket sem atendente), "Todas" = sem user_id.
+            when (status) {
+                "assigned" -> br.com.vipdesk.mobile.di.AppContainer.tokenManager.getUserId()?.let { params["user_id"] = it.toString() }
+                "waiting" -> params["user_id"] = "-1"
+            }
             if (media.isNotEmpty()) params["media"] = media
             params["take"] = "100"
             val response = apiService.getConversations(params)
@@ -44,7 +49,8 @@ class ConversationRepository(private val apiService: ApiService) {
                     webchat = body.webchat,
                     monitcall = body.monitcall
                 )
-                Result.success(body.data)
+                // "Fila" segue o critério do contador do backend: sem atendente e sem bot ativo.
+                Result.success(if (status == "waiting") body.data.filter { it.autoReply == 0 } else body.data)
             } else {
                 Result.failure(Exception("Erro ao buscar conversas"))
             }

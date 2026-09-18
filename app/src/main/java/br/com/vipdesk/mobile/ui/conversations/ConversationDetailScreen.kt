@@ -69,6 +69,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -120,6 +121,7 @@ import br.com.vipdesk.mobile.ui.theme.AppTheme
 import br.com.vipdesk.mobile.ui.theme.Inter
 import br.com.vipdesk.mobile.ui.theme.Tint
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Entrada unificada da linha do tempo: mensagem ou comentário interno. */
 private sealed class ThreadItem(val sortDate: java.util.Date?) {
@@ -127,7 +129,6 @@ private sealed class ThreadItem(val sortDate: java.util.Date?) {
     class Note(val comment: Comment) : ThreadItem(parseMsgDate(comment.createdAt))
 }
 
-private const val WEB_ONLY = "Disponível na versão web"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -146,6 +147,8 @@ fun ConversationDetailScreen(
     var showActions by remember { mutableStateOf(false) }
     var showContact by remember { mutableStateOf(false) }
     var showNewTicket by remember { mutableStateOf(false) }
+    var showSchedule by remember { mutableStateOf(false) }
+    var pinned by remember { mutableStateOf(false) }
     var confirmResolve by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
 
@@ -198,6 +201,11 @@ fun ConversationDetailScreen(
     }
 
     val conv = uiState.conversation
+    val scope = rememberCoroutineScope()
+    if (showSchedule) br.com.vipdesk.mobile.ui.agenda.AppointmentCreateSheet(
+        onDismiss = { showSchedule = false }, onCreated = { toast = it },
+        contactId = conv?.contact?.id, contactName = conv?.contact?.name, phoneNumber = conv?.contact?.phoneNumber
+    )
     val contact = conv?.contact
     val ticket = conv?.activeTicket
     val source = conv?.source
@@ -396,13 +404,24 @@ fun ConversationDetailScreen(
                     onFailure = { fastError = it.message ?: "Sem conexão" }
                 )
             }
+            var quickQuery by remember { mutableStateOf("") }
+            val shown = fastMessages?.filter {
+                quickQuery.isBlank() ||
+                    it.title.orEmpty().contains(quickQuery, true) || it.message.orEmpty().contains(quickQuery, true)
+            }
             Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp).heightIn(max = 560.dp).verticalScroll(rememberScrollState())) {
-                Text("Mensagens rápidas", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.text, modifier = Modifier.padding(bottom = 6.dp))
+                Text("Mensagens rápidas" + (fastMessages?.size?.takeIf { it > 0 }?.let { " · $it" } ?: ""), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.text, modifier = Modifier.padding(bottom = 6.dp))
+                // Empresas com dezenas de mensagens: busca evita rolar a lista inteira
+                if ((fastMessages?.size ?: 0) > 8) {
+                    br.com.vipdesk.mobile.ui.components.VdSearchField(quickQuery, { quickQuery = it }, "Buscar mensagem")
+                    Spacer(Modifier.height(8.dp))
+                }
                 when {
                     fastError != null -> Text(fastError ?: "", fontSize = 13.sp, color = c.danger, modifier = Modifier.padding(vertical = 12.dp))
                     fastMessages == null -> Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.primary, modifier = Modifier.size(22.dp)) }
-                    fastMessages!!.isEmpty() -> Text("Nenhuma mensagem rápida cadastrada. Cadastre em Configurações › Mensagens rápidas (web).", fontSize = 13.sp, color = c.muted, modifier = Modifier.padding(vertical = 12.dp))
-                    else -> fastMessages!!.forEach { reply ->
+                    fastMessages!!.isEmpty() -> Text("Nenhuma mensagem rápida cadastrada. Crie em Configurações › Respostas rápidas.", fontSize = 13.sp, color = c.muted, modifier = Modifier.padding(vertical = 12.dp))
+                    shown!!.isEmpty() -> Text("Nenhuma mensagem encontrada para \"$quickQuery\".", fontSize = 13.sp, color = c.muted, modifier = Modifier.padding(vertical = 12.dp))
+                    else -> shown.forEach { reply ->
                         Column(
                             Modifier.fillMaxWidth().clickable {
                                 viewModel.onMessageTextChange(reply.message.orEmpty()); internalMode = false; showQuickReplies = false
@@ -429,12 +448,25 @@ fun ConversationDetailScreen(
                 VdSheetRow(Icons.Outlined.PanTool, "Assumir conversa", onClick = { showActions = false; viewModel.assignToMe() })
                 VdSheetRow(Icons.Outlined.SwapHoriz, "Transferir", trailing = "depto ou atendente ›", onClick = { showActions = false; viewModel.showTransferDialog() })
                 VdSheetRow(Icons.Outlined.ConfirmationNumber, "Abrir ticket", onClick = { showActions = false; showNewTicket = true })
-                VdSheetRow(Icons.Outlined.CalendarMonth, "Agendar", onClick = { showActions = false; toast = WEB_ONLY })
-                VdSheetRow(Icons.Outlined.SmartToy, "Pausar bot / auto-resposta", onClick = { showActions = false; toast = WEB_ONLY })
+                VdSheetRow(Icons.Outlined.CalendarMonth, "Agendar", onClick = { showActions = false; showSchedule = true })
+                val botOn = (conv?.autoReply ?: 0) != 0
+                VdSheetRow(Icons.Outlined.SmartToy, if (botOn) "Pausar bot / auto-resposta" else "Reativar bot / auto-resposta", trailing = if (botOn) "bot ativo" else "bot pausado", onClick = {
+                    showActions = false
+                    scope.launch {
+                        br.com.vipdesk.mobile.ui.modules.apiPost("chat/conversation/${conv?.id}/autoReply", br.com.vipdesk.mobile.ui.modules.json("conversation_id" to conv?.id, "auto_reply" to !botOn)).fold(
+                            { toast = if (botOn) "Bot pausado nesta conversa" else "Bot reativado"; viewModel.loadAll() }, { toast = it.message }
+                        )
+                    }
+                })
                 VdSheetRow(Icons.Outlined.Phone, "Ligar", onClick = { showActions = false; dial(context, contact?.phoneNumber) })
-                VdSheetRow(Icons.Outlined.MarkEmailUnread, "Marcar como não lida", onClick = { showActions = false; toast = WEB_ONLY })
-                VdSheetRow(Icons.Outlined.PushPin, "Fixar conversa", onClick = { showActions = false; toast = WEB_ONLY })
-                VdSheetRow(Icons.Outlined.PictureInPicture, "Abrir em janela flutuante", onClick = { showActions = false; toast = WEB_ONLY })
+                VdSheetRow(Icons.Outlined.PushPin, if (pinned) "Desafixar conversa" else "Fixar conversa", onClick = {
+                    showActions = false
+                    scope.launch {
+                        br.com.vipdesk.mobile.ui.modules.apiPut("conversation/${conv?.id}/pin", br.com.vipdesk.mobile.ui.modules.json("pinned" to !pinned)).fold(
+                            { pinned = !pinned; toast = if (pinned) "Conversa fixada no topo" else "Conversa desafixada" }, { toast = it.message }
+                        )
+                    }
+                })
                 HorizontalDivider(color = c.divider, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                 VdSheetRow(
                     Icons.Outlined.CheckCircle, "Finalizar ticket",

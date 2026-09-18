@@ -40,6 +40,12 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import br.com.vipdesk.mobile.ui.components.rememberDragBoardState
+import br.com.vipdesk.mobile.ui.components.dropHighlight
+import br.com.vipdesk.mobile.ui.components.dragColumn
+import br.com.vipdesk.mobile.ui.components.dragCard
+import br.com.vipdesk.mobile.ui.components.DragOverlay
+import br.com.vipdesk.mobile.ui.components.DragBoardState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -83,6 +89,10 @@ fun KanbanScreen(
     val total = columns.sumOf { it.cards.size }
     var toast by remember { mutableStateOf<String?>(null) }
     var showBoards by remember { mutableStateOf(false) }
+    var assignFor by remember { mutableStateOf<DemoKanbanCard?>(null) }
+    var assignOptions by remember { mutableStateOf<List<Pair<Int, String>>>(emptyList()) }
+    // Arrastar cartão entre colunas (tela 14: long-press + drag)
+    val drag = rememberDragBoardState()
     LaunchedEffect(Unit) { if (KanbanStore.columns.isEmpty()) KanbanStore.load() }
     var menuCard by remember { mutableStateOf<DemoKanbanCard?>(null) }
     var showMove by remember { mutableStateOf(false) }
@@ -96,6 +106,13 @@ fun KanbanScreen(
         }
     }
     if (showBoards) BoardPickerSheet(onDismiss = { showBoards = false })
+    assignFor?.let { card ->
+        br.com.vipdesk.mobile.ui.modules.PickerSheet("Responsável", assignOptions.map { it.first.toString() to it.second }, onDismiss = { assignFor = null; assignOptions = emptyList() }) { id ->
+            val name = assignOptions.firstOrNull { it.first.toString() == id }?.second ?: ""
+            assignFor = null
+            scope.launch { KanbanStore.assign(card.id, id.toInt(), name).fold({ toast = "Atribuída a $name" }, { toast = it.message }) }
+        }
+    }
 
     Box(Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize()) {
@@ -136,8 +153,10 @@ fun KanbanScreen(
                         modifier = Modifier
                             .width(300.dp)
                             .fillMaxHeight()
+                            .dragColumn(drag, col.name)
                             .clip(RoundedCornerShape(16.dp))
                             .background(c.surface)
+                            .dropHighlight(drag, col.name, c.primary)
                             .border(
                                 1.dp,
                                 if (c.isDark) Color(0xFF3F424D) else Color(0x12292B31),
@@ -176,7 +195,10 @@ fun KanbanScreen(
                                 KanbanCardItem(
                                     card = card,
                                     onClick = { onCardClick(card.id) },
-                                    onMenu = { menuCard = card }
+                                    onMenu = { menuCard = card },
+                                    modifier = Modifier.dragCard(drag, card.id, col.name) { id, target ->
+                                        scope.launch { KanbanStore.move(id, target).fold({ toast = "Movida para $target" }, { toast = it.message }) }
+                                    }
                                 )
                             }
                             Row(
@@ -204,6 +226,11 @@ fun KanbanScreen(
             }
         }
 
+        DragOverlay(drag) {
+            KanbanStore.columns.flatMap { it.cards }.firstOrNull { it.id == drag.draggingId }?.let { c2 ->
+                KanbanCardItem(card = c2, onClick = {}, onMenu = {})
+            }
+        }
         toast?.let {
             Box(
                 Modifier
@@ -231,9 +258,10 @@ fun KanbanScreen(
                 VdSheetRow(Icons.Outlined.SwapHoriz, "Mover para…", iconTint = c.accent, onClick = {
                     showMove = true
                 })
-                VdSheetRow(Icons.Outlined.PersonAddAlt, "Atribuir responsável", trailing = "versão web", onClick = {
+                VdSheetRow(Icons.Outlined.PersonAddAlt, "Atribuir responsável", trailing = card.assignee.ifBlank { null }, onClick = {
+                    assignFor = card
                     menuCard = null
-                    toast = "Atribuição de responsável disponível na versão web"
+                    scope.launch { assignOptions = KanbanStore.members() }
                 })
                 VdSheetRow(Icons.Outlined.ContentCopy, "Duplicar cartão", onClick = {
                     val colName = KanbanStore.columnOf(card.id)?.name ?: columns.first().name
@@ -382,11 +410,12 @@ private fun BoardPickerSheet(onDismiss: () -> Unit) {
 private fun KanbanCardItem(
     card: DemoKanbanCard,
     onClick: () -> Unit,
-    onMenu: () -> Unit
+    onMenu: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val c = AppTheme.colors
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(c.background)

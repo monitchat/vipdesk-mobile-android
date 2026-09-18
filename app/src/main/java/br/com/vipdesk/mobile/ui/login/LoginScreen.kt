@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,6 +77,10 @@ fun LoginScreen(
 
     state.mfa?.let { challenge ->
         MfaScreen(state = state, challenge = challenge, viewModel = viewModel)
+        return
+    }
+    state.companies?.let { companies ->
+        CompanyPickerScreen(state = state, companies = companies, viewModel = viewModel)
         return
     }
 
@@ -230,6 +235,53 @@ private fun MfaScreen(state: LoginUiState, challenge: br.com.vipdesk.mobile.data
                 Text("Tem um código de recuperação? Digite-o no campo acima.", fontSize = 12.sp, color = c.muted, textAlign = TextAlign.Center)
                 Text("Voltar ao login", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.muted, modifier = Modifier.clickable { viewModel.cancelMfa() })
             }
+        }
+    }
+}
+
+
+/** Escolha de empresa (tela 05): a credencial vale em mais de uma empresa. */
+@Composable
+private fun CompanyPickerScreen(state: LoginUiState, companies: List<br.com.vipdesk.mobile.data.model.CompanyOption>, viewModel: LoginViewModel) {
+    val c = AppTheme.colors
+    var selected by remember { mutableStateOf<Int?>(null) }
+    androidx.activity.compose.BackHandler { viewModel.cancelCompanySelection() }
+
+    Column(Modifier.fillMaxSize().background(c.surface).statusBarsPadding().navigationBarsPadding()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Image(painterResource(R.drawable.logo_vipdesk), contentDescription = "VipDesk", modifier = Modifier.height(28.dp))
+            Text("VipDesk", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.text)
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(c.divider))
+
+        Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Em qual empresa você quer entrar?", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = c.text)
+            Text("Seu e-mail ${state.email} tem acesso a ${companies.size} empresas.", fontSize = 13.sp, color = c.muted, modifier = Modifier.padding(bottom = 6.dp))
+            state.error?.let { Text(it, fontSize = 12.sp, color = c.danger) }
+            companies.forEach { company ->
+                val isSel = selected == company.id
+                Row(
+                    Modifier.fillMaxWidth()
+                        .background(if (isSel) c.primarySurface else c.surface, RoundedCornerShape(10.dp))
+                        .border(1.dp, if (isSel) c.primary else c.divider, RoundedCornerShape(10.dp))
+                        .clickable(enabled = !state.isLoading) { selected = company.id; viewModel.selectCompany(company.id) }
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(Modifier.size(40.dp).background(c.primarySurface, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+                        Text(company.name?.trim()?.firstOrNull()?.uppercaseChar()?.toString() ?: "?", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.primary)
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(company.name ?: "Empresa ${company.id}", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.text)
+                        Text("ID ${company.id}", fontSize = 12.sp, color = c.muted)
+                    }
+                    if (isSel && state.isLoading) CircularProgressIndicator(Modifier.size(18.dp), color = c.primary, strokeWidth = 2.dp)
+                    else Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = c.placeholder, modifier = Modifier.size(20.dp))
+                }
+            }
+        }
+        Box(Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
+            VdButton("Usar outro e-mail", onClick = { viewModel.cancelCompanySelection() }, style = VdButtonStyle.Secondary, modifier = Modifier.fillMaxWidth())
         }
     }
 }

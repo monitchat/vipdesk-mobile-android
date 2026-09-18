@@ -88,6 +88,9 @@ class ConversationListViewModel(
         }
     }
 
+    /** Recarrega sem piscar a tela (volta do segundo plano, eventos do socket). */
+    fun refreshSilently() = silentRefresh()
+
     private fun silentRefresh() {
         viewModelScope.launch {
             val result = conversationRepository.getConversations(

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.Forum
@@ -72,7 +73,6 @@ import br.com.vipdesk.mobile.ui.theme.Tint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val WEB_ONLY = "Disponível na versão web"
 
 /** Detalhe do negócio (tela 18): valor, stepper de etapas, Ganhar/Perder/Próx. etapa, abas. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,6 +106,25 @@ fun DealDetailScreen(dealId: Int, onBack: () -> Unit, onOpenContact: (Int) -> Un
     }
 
     LaunchedEffect(dealId) { reload() }
+    var extrasVersion by remember { mutableStateOf(0) }
+    val extras = rememberDealExtras(dealId, extrasVersion)
+    var activityPrompt by remember { mutableStateOf<String?>(null) }
+    activityPrompt?.let { type ->
+        br.com.vipdesk.mobile.ui.modules.TextPromptSheet(
+            title = if (type == "note") "Nova nota" else "Nova tarefa",
+            hint = if (type == "note") "O que aconteceu neste negócio?" else "O que precisa ser feito?",
+            confirmLabel = if (type == "note") "Salvar nota" else "Criar tarefa",
+            onDismiss = { activityPrompt = null }
+        ) { text ->
+            val body = br.com.vipdesk.mobile.ui.modules.json(
+                "deal_id" to dealId, "type" to type,
+                "title" to (if (type == "note") "Nota" else text.lines().first().take(120)),
+                "description" to text,
+                "completed_at" to (if (type == "note") "now" else null)
+            )
+            br.com.vipdesk.mobile.ui.modules.apiPost("deal-activity", body).map { extrasVersion++; if (type == "note") "Nota registrada" else "Tarefa criada" }
+        }
+    }
     LaunchedEffect(toast) { if (toast != null) { delay(2000); toast = null } }
 
     fun act(block: suspend () -> Result<ApiDeal?>, success: String) {
@@ -192,6 +211,7 @@ fun DealDetailScreen(dealId: Int, onBack: () -> Unit, onOpenContact: (Int) -> Un
                 else -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     when (tab) {
                         "Timeline" -> {
+                            DealTimelineExtras(extras)
                             TimelineItem("Estágio atual: ${d.stage?.name ?: "—"}", d.updatedAt?.let { relativeTime(it) } ?: "", "${d.owner?.name ?: "—"}${d.source?.let { " · origem ${it}" } ?: ""}", c.primarySurface, c.primary)
                             d.lastActivityAt?.let { TimelineItem("Última atividade", relativeTime(it), "Registrada no CRM", Tint.blueBg, Tint.blueFg) }
                             d.createdAt?.let { TimelineItem("Negócio criado", relativeTime(it), "Pipeline ${d.pipeline?.name ?: ""}", c.surfaceAlt, c.textTertiary, last = true) }
@@ -212,8 +232,8 @@ fun DealDetailScreen(dealId: Int, onBack: () -> Unit, onOpenContact: (Int) -> Un
                                 }
                             }
                         }
-                        "Produtos" -> Text("Produtos do negócio são gerenciados na versão web.", fontSize = 13.sp, color = c.muted, modifier = Modifier.padding(8.dp))
-                        else -> Text("Orçamentos, contratos e anexos ficam na versão web.", fontSize = 13.sp, color = c.muted, modifier = Modifier.padding(8.dp))
+                        "Produtos" -> DealProductsTab(extras)
+                        else -> DealDocsTab(extras)
                     }
                     Spacer(Modifier.height(16.dp))
                 }
@@ -224,7 +244,7 @@ fun DealDetailScreen(dealId: Int, onBack: () -> Unit, onOpenContact: (Int) -> Un
                 Column(Modifier.fillMaxWidth().background(c.surface).navigationBarsPadding()) {
                     VdDivider()
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        BottomAction(Icons.Outlined.CheckBox, "Nota", Modifier.weight(1f)) { toast = WEB_ONLY }
+                        BottomAction(Icons.Outlined.EditNote, "Nota", Modifier.weight(1f)) { activityPrompt = "note" }
                         BottomAction(Icons.Outlined.Phone, "Ligar", Modifier.weight(1f)) { dial(context, d.contact?.phoneNumber) { toast = it } }
                         BottomAction(Icons.Outlined.Forum, "Conversa", Modifier.weight(1f)) {
                             val cid = d.contact?.id
@@ -239,7 +259,7 @@ fun DealDetailScreen(dealId: Int, onBack: () -> Unit, onOpenContact: (Int) -> Un
                             if (email.isNullOrBlank()) toast = "Contato sem e-mail"
                             else try { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email"))) } catch (_: Exception) { toast = "Nenhum app de e-mail" }
                         }
-                        BottomAction(Icons.Outlined.CheckBox, "Tarefa", Modifier.weight(1f)) { toast = WEB_ONLY }
+                        BottomAction(Icons.Outlined.CheckBox, "Tarefa", Modifier.weight(1f)) { activityPrompt = "task" }
                     }
                 }
             }

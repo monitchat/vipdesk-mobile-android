@@ -3,6 +3,7 @@ package br.com.vipdesk.mobile.ui.login
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import br.com.vipdesk.mobile.data.model.CompanyOption
 import br.com.vipdesk.mobile.data.model.MfaChallenge
 import br.com.vipdesk.mobile.data.repository.AuthRepository
 import br.com.vipdesk.mobile.di.AppContainer
@@ -21,7 +22,10 @@ data class LoginUiState(
     val mfa: MfaChallenge? = null,
     val mfaCode: String = "",
     val mfaError: String? = null,
-    val mfaInfo: String? = null
+    val mfaInfo: String? = null,
+    // Tela 05: credencial válida em mais de uma empresa
+    val companies: List<CompanyOption>? = null,
+    val selectedCompanyId: Int? = null
 )
 
 class LoginViewModel(
@@ -48,7 +52,7 @@ class LoginViewModel(
     }
 
     fun onEmailChange(email: String) {
-        _uiState.value = _uiState.value.copy(email = email, error = null)
+        _uiState.value = _uiState.value.copy(email = email, error = null, selectedCompanyId = null)
     }
 
     fun onPasswordChange(password: String) {
@@ -64,7 +68,7 @@ class LoginViewModel(
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            val result = authRepository.login(state.email, state.password)
+            val result = authRepository.login(state.email, state.password, state.selectedCompanyId)
             result.fold(
                 onSuccess = { outcome -> applyOutcome(outcome) },
                 onFailure = {
@@ -83,7 +87,19 @@ class LoginViewModel(
                 _uiState.value.copy(isLoading = false, isLoggedIn = true, mfa = null, mfaCode = "", mfaError = null)
             is AuthRepository.LoginOutcome.MfaRequired ->
                 _uiState.value.copy(isLoading = false, mfa = outcome.challenge, mfaCode = "", mfaError = null, mfaInfo = null)
+            is AuthRepository.LoginOutcome.SelectCompany ->
+                _uiState.value.copy(isLoading = false, companies = outcome.companies, selectedCompanyId = null)
         }
+    }
+
+    /** Tela 05: reenvia o login com a empresa escolhida (pode ainda cair em MFA). */
+    fun selectCompany(companyId: Int) {
+        _uiState.value = _uiState.value.copy(selectedCompanyId = companyId, companies = null, error = null)
+        login()
+    }
+
+    fun cancelCompanySelection() {
+        _uiState.value = _uiState.value.copy(companies = null, selectedCompanyId = null, password = "")
     }
 
     fun onMfaCodeChange(code: String) {
@@ -125,7 +141,7 @@ class LoginViewModel(
     }
 
     fun cancelMfa() {
-        _uiState.value = _uiState.value.copy(mfa = null, mfaCode = "", mfaError = null, mfaInfo = null, password = "")
+        _uiState.value = _uiState.value.copy(mfa = null, mfaCode = "", mfaError = null, mfaInfo = null, password = "", selectedCompanyId = null)
     }
 
     companion object {

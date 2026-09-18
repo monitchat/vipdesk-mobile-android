@@ -42,7 +42,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.vipdesk.mobile.data.model.ApiContact
-import br.com.vipdesk.mobile.data.demo.DEMO_RECENT_SEARCHES
 import br.com.vipdesk.mobile.data.model.TicketListItem
 import br.com.vipdesk.mobile.di.AppContainer
 import br.com.vipdesk.mobile.ui.components.VdAvatar
@@ -54,6 +53,7 @@ import br.com.vipdesk.mobile.ui.components.ticketStatusVisual
 import br.com.vipdesk.mobile.ui.theme.AppTheme
 import kotlinx.coroutines.delay
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
     onBack: () -> Unit,
@@ -62,6 +62,8 @@ fun SearchScreen(
 ) {
     val c = AppTheme.colors
     var query by remember { mutableStateOf("") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var recent by remember { mutableStateOf(loadRecentSearches(context)) }
     var tickets by remember { mutableStateOf<List<TicketListItem>>(emptyList()) }
     var contacts by remember { mutableStateOf<List<ApiContact>>(emptyList()) }
     val focusRequester = remember { FocusRequester() }
@@ -75,8 +77,11 @@ fun SearchScreen(
             return@LaunchedEffect
         }
         delay(400)
-        AppContainer.mobileRepository.getTickets("all", query).onSuccess { tickets = it }
+        AppContainer.mobileRepository.getTickets("all", query).onSuccess { tickets = it.items }
         AppContainer.crmRepository.searchContacts(query, take = 4).onSuccess { contacts = it }
+        // Guarda o termo depois de uma pausa maior (evita salvar cada letra digitada)
+        delay(1500)
+        if (query.trim().length >= 3) recent = saveRecentSearch(context, query.trim())
     }
 
     Column(
@@ -135,8 +140,9 @@ fun SearchScreen(
             when {
                 query.isBlank() -> {
                     VdSectionLabel("Buscas recentes", Modifier.padding(vertical = 8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        DEMO_RECENT_SEARCHES.take(3).forEach { term ->
+                    if (recent.isEmpty()) Text("Suas buscas aparecem aqui.", fontSize = 12.sp, color = c.textSecondary)
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        recent.take(6).forEach { term ->
                             Row(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(999.dp))
@@ -225,4 +231,18 @@ fun SearchScreen(
             Spacer(Modifier.height(40.dp))
         }
     }
+}
+
+
+private const val RECENT_PREFS = "vipdesk_search"
+private const val RECENT_KEY = "recent"
+
+private fun loadRecentSearches(context: android.content.Context): List<String> =
+    context.getSharedPreferences(RECENT_PREFS, android.content.Context.MODE_PRIVATE)
+        .getString(RECENT_KEY, "").orEmpty().split('\n').filter { it.isNotBlank() }
+
+private fun saveRecentSearch(context: android.content.Context, term: String): List<String> {
+    val list = (listOf(term) + loadRecentSearches(context).filterNot { it.equals(term, ignoreCase = true) }).take(8)
+    context.getSharedPreferences(RECENT_PREFS, android.content.Context.MODE_PRIVATE).edit().putString(RECENT_KEY, list.joinToString("\n")).apply()
+    return list
 }

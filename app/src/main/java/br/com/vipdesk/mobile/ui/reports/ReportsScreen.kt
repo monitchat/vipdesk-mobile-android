@@ -1,27 +1,25 @@
 package br.com.vipdesk.mobile.ui.reports
 
-import androidx.compose.foundation.Canvas
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.IosShare
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,283 +29,142 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import br.com.vipdesk.mobile.data.demo.DEMO_AGENT_PERF
-import br.com.vipdesk.mobile.data.demo.DEMO_DEPT_PERF
-import br.com.vipdesk.mobile.data.demo.DEMO_REPORT_BARS
-import br.com.vipdesk.mobile.data.demo.DEMO_REPORT_KPIS
-import br.com.vipdesk.mobile.ui.components.VdAvatar
-import br.com.vipdesk.mobile.ui.components.VdBar
+import br.com.vipdesk.mobile.data.model.StatisticsCountResponse
+import br.com.vipdesk.mobile.data.model.StatisticsResponse
+import br.com.vipdesk.mobile.di.AppContainer
 import br.com.vipdesk.mobile.ui.components.VdCard
+import br.com.vipdesk.mobile.ui.components.VdEmptyState
+import br.com.vipdesk.mobile.ui.components.VdHeaderIcon
 import br.com.vipdesk.mobile.ui.components.VdKpiCard
 import br.com.vipdesk.mobile.ui.components.VdPill
 import br.com.vipdesk.mobile.ui.components.VdPillRow
-import br.com.vipdesk.mobile.ui.components.VdHeaderIcon
 import br.com.vipdesk.mobile.ui.components.VdSectionLabel
 import br.com.vipdesk.mobile.ui.components.VdSubHeader
-import br.com.vipdesk.mobile.ui.components.VdToast
+import br.com.vipdesk.mobile.ui.modules.apiGet
+import br.com.vipdesk.mobile.ui.modules.int
+import br.com.vipdesk.mobile.ui.modules.rows
+import br.com.vipdesk.mobile.ui.modules.str
 import br.com.vipdesk.mobile.ui.theme.AppTheme
-import br.com.vipdesk.mobile.ui.theme.VdDanger
-import br.com.vipdesk.mobile.ui.theme.VdSuccess
-import kotlinx.coroutines.delay
+import br.com.vipdesk.mobile.ui.theme.Tint
+import com.google.gson.JsonObject
 
-private val PERIODS = listOf("Hoje", "Ontem", "7 dias", "30 dias", "Período…")
+private val PERIODS = listOf("Hoje" to "today", "Ontem" to "yesterday", "Semana" to "week", "Mês" to "month")
 
+/** Relatórios de atendimento (tela 29): mesmos endpoints do dashboard web. */
 @Composable
 fun ReportsScreen(onBack: () -> Unit) {
     val c = AppTheme.colors
-    var period by remember { mutableStateOf("7 dias") }
-    var toast by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    var period by remember { mutableStateOf("month") }
+    var stats by remember { mutableStateOf<StatisticsResponse?>(null) }
+    var counts by remember { mutableStateOf<StatisticsCountResponse?>(null) }
+    var agents by remember { mutableStateOf<List<JsonObject>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(toast) {
-        if (toast != null) {
-            delay(1900)
-            toast = null
-        }
-    }
-
-    Box(Modifier.fillMaxSize().background(c.background)) {
-        Column(Modifier.fillMaxSize()) {
-            VdSubHeader(title = "Relatórios", subtitle = "Dados de exemplo · em breve com a API", onBack = onBack, actions = {
-                VdHeaderIcon(Icons.Outlined.IosShare, "Exportar", { toast = "Exportação disponível na versão web" })
-            })
-
-            VdPillRow(modifier = Modifier.padding(vertical = 10.dp)) {
-                PERIODS.forEach { p ->
-                    VdPill(label = p, selected = period == p, onClick = { period = p })
-                }
-                VdPill(label = "Equipe · Canal", selected = false, onClick = { })
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // KPIs
-                DEMO_REPORT_KPIS.chunked(2).forEach { pair ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        pair.forEach { kpi ->
-                            VdKpiCard(
-                                number = kpi.n,
-                                label = kpi.label,
-                                delta = kpi.delta,
-                                deltaColor = if (kpi.positive) VdSuccess else VdDanger,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
-
-                // Conversas ao longo do tempo
-                VdCard {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        VdSectionLabel("Conversas ao longo do tempo")
-                        Spacer(Modifier.weight(1f))
-                        Text(period, fontSize = 11.sp, color = c.textFaint)
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(88.dp),
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        DEMO_REPORT_BARS.forEach { v ->
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                Box(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height((v * 0.8f * 0.88f).dp)
-                                        .background(
-                                            if (c.isDark) Color(0xFF5D5294) else c.accent,
-                                            RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)
-                                        )
-                                )
-                                Box(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height((v * 0.12f * 0.88f).dp)
-                                        .background(
-                                            c.chip,
-                                            RoundedCornerShape(bottomStart = 2.dp, bottomEnd = 2.dp)
-                                        )
-                                )
-                            }
-                        }
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.padding(top = 10.dp)
-                    ) {
-                        Legend(if (c.isDark) Color(0xFF5D5294) else c.accent, "Atendidas")
-                        Legend(c.chip, "Perdidas")
-                    }
-                }
-
-                // Satisfação
-                VdCard {
-                    VdSectionLabel("Satisfação do cliente", Modifier.padding(bottom = 12.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(18.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Canvas(Modifier.size(92.dp)) {
-                                val stroke = Stroke(width = 12.dp.toPx(), cap = StrokeCap.Butt)
-                                drawArc(
-                                    color = Color(0x22E9E9ED),
-                                    startAngle = -90f,
-                                    sweepAngle = 360f,
-                                    useCenter = false,
-                                    style = stroke,
-                                    size = Size(size.width, size.height)
-                                )
-                                drawArc(
-                                    color = VdSuccess,
-                                    startAngle = -90f,
-                                    sweepAngle = 338f,
-                                    useCenter = false,
-                                    style = stroke,
-                                    size = Size(size.width, size.height)
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    "94%",
-                                    fontSize = 19.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = c.textPrimary
-                                )
-                                Text("CSAT", fontSize = 9.5.sp, color = c.textSecondary)
-                            }
-                        }
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(7.dp)
-                        ) {
-                            StatLine("Avaliações", "312")
-                            StatLine("Nota média", "4,8 / 5")
-                            StatLine("NPS", "+72", VdSuccess)
-                        }
-                    }
-                }
-
-                // Desempenho por agente
-                VdCard {
-                    VdSectionLabel("Desempenho por agente", Modifier.padding(bottom = 10.dp))
-                    val max = DEMO_AGENT_PERF.maxOf { it.value }
-                    DEMO_AGENT_PERF.forEach { agent ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.padding(vertical = 7.dp)
-                        ) {
-                            VdAvatar(name = agent.name, size = 28.dp, fontSize = 10)
-                            Text(
-                                agent.name,
-                                fontSize = 13.sp,
-                                color = c.textPrimary,
-                                modifier = Modifier.width(104.dp)
-                            )
-                            VdBar(
-                                fraction = agent.value.toFloat() / max,
-                                color = if (c.isDark) Color(0xFF796CBF) else c.accent,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                "${agent.value}",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = c.textPrimary,
-                                modifier = Modifier.width(30.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Tickets por departamento
-                VdCard {
-                    VdSectionLabel("Tickets por departamento", Modifier.padding(bottom = 10.dp))
-                    val max = DEMO_DEPT_PERF.maxOf { it.value }
-                    DEMO_DEPT_PERF.forEach { dept ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.padding(vertical = 6.dp)
-                        ) {
-                            Text(
-                                dept.name,
-                                fontSize = 12.5.sp,
-                                color = c.textSecondary,
-                                modifier = Modifier.width(104.dp)
-                            )
-                            VdBar(
-                                fraction = dept.value.toFloat() / max,
-                                color = Color(dept.colorHex),
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                "${dept.value}",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = c.textPrimary,
-                                modifier = Modifier.width(30.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(40.dp))
-            }
-        }
-
-        toast?.let {
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 40.dp)
-            ) { VdToast(it) }
-        }
-    }
-}
-
-@Composable
-private fun Legend(color: Color, label: String) {
-    val c = AppTheme.colors
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
-    ) {
-        Box(Modifier.size(7.dp).background(color, RoundedCornerShape(2.dp)))
-        Text(label, fontSize = 11.sp, color = c.textSecondary)
-    }
-}
-
-@Composable
-private fun StatLine(label: String, value: String, valueColor: Color? = null) {
-    val c = AppTheme.colors
-    Row(Modifier.fillMaxWidth()) {
-        Text(label, fontSize = 12.5.sp, color = c.textSecondary, modifier = Modifier.weight(1f))
-        Text(
-            value,
-            fontSize = 12.5.sp,
-            fontWeight = FontWeight.Medium,
-            color = valueColor ?: c.textPrimary
+    LaunchedEffect(period) {
+        stats = null; counts = null; agents = null; error = null
+        AppContainer.mobileRepository.getStatistics(period).fold({ stats = it }, { error = it.message })
+        AppContainer.mobileRepository.getStatisticsCount(period).onSuccess { counts = it }
+        val filter = """{"created":"$period","by":"company","user_id":null,"current_status":null,"department_id":null,"start":null,"end":null,"start_date":null,"end_date":null}"""
+        apiGet("statistic/ticketsDashboardTable", mapOf("filter" to filter, "take" to "100")).fold(
+            { agents = it.rows().first }, { agents = emptyList() }
         )
+    }
+
+    fun exportCsv() {
+        val s = stats ?: return
+        val label = PERIODS.first { it.second == period }.first
+        val sb = StringBuilder("Relatório VIPdesk;$label\n\nIndicador;Quantidade\n")
+        sb.append("Em aberto;${s.openTickets.count}\nEm atendimento;${s.assignedTickets.count}\nAguardando;${s.waitingTickets.count}\nSem resposta;${s.ignoredTickets.count}\nFinalizados;${s.closedTickets.count}\n")
+        agents?.takeIf { it.isNotEmpty() }?.let { list ->
+            sb.append("\nAgente;Aguardando;Em aberto;Finalizados\n")
+            list.forEach { a -> sb.append("${a.str("user")};${a.int("waitingTicket") ?: 0};${a.int("openTickets") ?: 0};${a.int("closedTickets") ?: 0}\n") }
+        }
+        counts?.departments?.takeIf { it.isNotEmpty() }?.let { d -> sb.append("\nDepartamento;Tickets\n"); d.forEach { sb.append("${it.label};${it.total}\n") } }
+        counts?.source?.takeIf { it.isNotEmpty() }?.let { d -> sb.append("\nCanal;Tickets\n"); d.forEach { sb.append("${it.label};${it.total}\n") } }
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/csv"
+            putExtra(Intent.EXTRA_SUBJECT, "Relatório VIPdesk · $label")
+            putExtra(Intent.EXTRA_TEXT, sb.toString())
+        }
+        runCatching { context.startActivity(Intent.createChooser(intent, "Exportar relatório")) }
+    }
+
+    Column(Modifier.fillMaxSize().background(c.background)) {
+        VdSubHeader(
+            title = "Relatórios", subtitle = "Atendimento e tickets", onBack = onBack,
+            actions = { VdHeaderIcon(Icons.Outlined.IosShare, "Exportar", { exportCsv() }) },
+            below = { VdPillRow(contentPaddingStart = 0.dp) { PERIODS.forEach { (l, v) -> VdPill(l, period == v, { period = v }) } } }
+        )
+        when {
+            error != null && stats == null -> VdEmptyState(Icons.Outlined.BarChart, "Não foi possível carregar", error ?: "")
+            stats == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.primary) }
+            else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                val s = stats!!
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    VdKpiCard("${s.openTickets.count}", "EM ABERTO", modifier = Modifier.weight(1f), topAccent = Tint.blueFg)
+                    VdKpiCard("${s.assignedTickets.count}", "EM ATENDIMENTO", modifier = Modifier.weight(1f), topAccent = c.primary)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    VdKpiCard("${s.waitingTickets.count}", "AGUARDANDO", modifier = Modifier.weight(1f), topAccent = Tint.amberFg)
+                    VdKpiCard("${s.ignoredTickets.count}", "SEM RESPOSTA", modifier = Modifier.weight(1f), topAccent = Tint.redFg)
+                    VdKpiCard("${s.closedTickets.count}", "FINALIZADOS", modifier = Modifier.weight(1f), topAccent = Tint.greenFg)
+                }
+
+                VdSectionLabel("Desempenho por agente")
+                when {
+                    agents == null -> CircularProgressIndicator(color = c.primary, modifier = Modifier.padding(8.dp))
+                    agents!!.isEmpty() -> Text("Sem dados de agentes no período.", fontSize = 12.sp, color = c.muted)
+                    else -> VdCard {
+                        val list = agents!!.sortedByDescending { it.int("closedTickets") ?: 0 }
+                        val max = list.maxOfOrNull { (it.int("closedTickets") ?: 0) + (it.int("openTickets") ?: 0) }?.coerceAtLeast(1) ?: 1
+                        list.forEach { a ->
+                            val closed = a.int("closedTickets") ?: 0; val open = a.int("openTickets") ?: 0; val waiting = a.int("waitingTicket") ?: 0
+                            Column(Modifier.padding(vertical = 6.dp)) {
+                                Row {
+                                    Text(a.str("user") ?: "—", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.text, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text("$closed finalizados · $open abertos" + (if (waiting > 0) " · $waiting aguard." else ""), fontSize = 11.sp, color = c.muted)
+                                }
+                                Row(Modifier.fillMaxWidth().padding(top = 4.dp).height(8.dp).background(c.surfaceAlt, RoundedCornerShape(4.dp))) {
+                                    if (closed > 0) Box(Modifier.fillMaxHeight().weight(closed.toFloat()).background(Tint.greenFg, RoundedCornerShape(4.dp)))
+                                    if (open > 0) Box(Modifier.fillMaxHeight().weight(open.toFloat()).background(Tint.blueFg, RoundedCornerShape(4.dp)))
+                                    val rest = max - closed - open
+                                    if (rest > 0) Spacer(Modifier.fillMaxHeight().weight(rest.toFloat()))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                counts?.let { ct ->
+                    if (ct.departments.isNotEmpty()) { VdSectionLabel("Por departamento"); Bars(ct.departments.map { it.label to it.total }) }
+                    if (ct.source.isNotEmpty()) { VdSectionLabel("Por canal"); Bars(ct.source.map { it.label to it.total }) }
+                    if (ct.status.isNotEmpty()) { VdSectionLabel("Por status"); Bars(ct.status.map { it.label to it.total }) }
+                }
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun Bars(data: List<Pair<String, Int>>) {
+    val c = AppTheme.colors
+    VdCard {
+        val max = data.maxOfOrNull { it.second }?.coerceAtLeast(1) ?: 1
+        data.sortedByDescending { it.second }.forEach { (label, v) ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, fontSize = 12.sp, color = c.text, modifier = Modifier.width(120.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Box(Modifier.weight(1f).height(10.dp).background(c.surfaceAlt, RoundedCornerShape(5.dp))) {
+                    Box(Modifier.fillMaxHeight().fillMaxWidth(v.toFloat() / max).background(c.primary, RoundedCornerShape(5.dp)))
+                }
+                Text("$v", fontSize = 11.sp, color = c.muted, modifier = Modifier.padding(start = 8.dp))
+            }
+        }
     }
 }

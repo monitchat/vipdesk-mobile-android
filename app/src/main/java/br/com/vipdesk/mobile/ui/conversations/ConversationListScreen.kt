@@ -79,6 +79,16 @@ fun ConversationListScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val c = AppTheme.colors
+    // Volta do segundo plano: enquanto o app está parado não chegam eventos do socket
+    // (conversas arquivadas/atribuídas no web ficavam na lista até puxar para atualizar).
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) viewModel.refreshSilently()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var onlyUnread by remember { mutableStateOf(false) }
 
     val list = if (onlyUnread) state.filteredConversations.filter { it.unreadMessages > 0 }

@@ -42,6 +42,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import br.com.vipdesk.mobile.ui.modules.rows
+import br.com.vipdesk.mobile.ui.modules.bool
+import br.com.vipdesk.mobile.ui.modules.str
+import br.com.vipdesk.mobile.ui.modules.int
+import br.com.vipdesk.mobile.ui.modules.objects
+import br.com.vipdesk.mobile.ui.modules.arr
+import br.com.vipdesk.mobile.ui.modules.obj
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -77,7 +86,6 @@ import br.com.vipdesk.mobile.ui.theme.Inter
 import br.com.vipdesk.mobile.ui.theme.Tint
 import kotlinx.coroutines.delay
 
-private const val WEB_ONLY = "Disponível na versão web"
 
 /** Detalhe do ticket (tela 15): cabeçalho compacto, SLA, abas Atividades / Propriedades / Horas. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -200,7 +208,7 @@ fun TicketDetailScreen(
                 else -> when (tab) {
                     "Atividades" -> ActivitiesTab(uiState, viewModel, onResolve = { showResolve = true }, onToast = { toast = it })
                     "Propriedades" -> PropertiesTab(uiState, viewModel, onOpenContact, onResolve = { showResolve = true }, onToast = { toast = it })
-                    else -> HoursTab(onToast = { toast = it })
+                    else -> HoursTab(ticketId = uiState.ticket?.id ?: 0, onToast = { toast = it })
                 }
             }
         }
@@ -359,6 +367,33 @@ private fun PropertiesTab(
     val c = AppTheme.colors
     val t = state.ticket ?: return
     var showStatusSheet by remember { mutableStateOf(false) }
+    var showPriority by remember { mutableStateOf(false) }
+    var showDepartment by remember { mutableStateOf(false) }
+    var departments by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    val propScope = rememberCoroutineScope()
+    // PUT ticket/{id} faz fill genérico: priority / department_id
+    fun updateTicket(field: String, value: Any?, okMsg: String) {
+        propScope.launch {
+            br.com.vipdesk.mobile.ui.modules.apiPut("ticket/${t.id}", br.com.vipdesk.mobile.ui.modules.json(field to value)).fold(
+                { onToast(okMsg); viewModel.load() }, { onToast(it.message ?: "Falha ao atualizar") }
+            )
+        }
+    }
+    if (showPriority) br.com.vipdesk.mobile.ui.modules.PickerSheet(
+        "Prioridade",
+        listOf("very_high" to "Muito alta", "high" to "Alta", "medium" to "Média", "low" to "Baixa", "very_low" to "Muito baixa"),
+        selectedId = t.priority, onDismiss = { showPriority = false }
+    ) { v -> showPriority = false; updateTicket("priority", v, "Prioridade atualizada") }
+    if (showDepartment) {
+        LaunchedEffect(Unit) {
+            br.com.vipdesk.mobile.ui.modules.apiGet("department", mapOf("take" to "100")).onSuccess { body ->
+                departments = body.rows().first.filter { it.bool("active") != false }.map { it.int("id").toString() to (it.str("name") ?: "—") }
+            }
+        }
+        br.com.vipdesk.mobile.ui.modules.PickerSheet("Departamento", departments, onDismiss = { showDepartment = false }) { id ->
+            showDepartment = false; updateTicket("department_id", id.toInt(), "Departamento atualizado")
+        }
+    }
     if (showStatusSheet) {
         TicketStatusSheet(
             statuses = state.statuses,
@@ -375,8 +410,8 @@ private fun PropertiesTab(
         VdCard(padding = 0.dp) {
             PropRow("Solicitante", t.contact?.name ?: "—", caret = t.contact?.id != null) { t.contact?.id?.let(onOpenContact) }
             PropRow("Status", "", caret = false, trailing = { VdTag("$stLabel ▾", color = stFg, background = stBg) }) { viewModel.loadStatuses(); showStatusSheet = true }
-            PropRow("Prioridade", priLabel, dot = priColor) { onToast(WEB_ONLY) }
-            PropRow("Departamento", t.department ?: "—") { onToast(WEB_ONLY) }
+            PropRow("Prioridade", priLabel, dot = priColor) { showPriority = true }
+            PropRow("Departamento", t.department ?: "—") { showDepartment = true }
             PropRow("Responsável", t.responsible?.name ?: "sem responsável", avatar = t.responsible?.name) { viewModel.openTransferDialog() }
             PropRow("Canal", sourceLabel(t.channel)) { }
             PropRow("Criado", t.createdAt?.let { relativeTime(it) } ?: "—") { }
@@ -419,24 +454,87 @@ private fun PropRow(
 // ————— Aba Horas —————
 
 @Composable
-private fun HoursTab(onToast: (String) -> Unit) {
+private fun HoursTab(ticketId: Int, onToast: (String) -> Unit) {
     val c = AppTheme.colors
-    Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val scope = rememberCoroutineScope()
+    var entries by remember { mutableStateOf<List<com.google.gson.JsonObject>>(emptyList()) }
+    var totals by remember { mutableStateOf<com.google.gson.JsonObject?>(null) }
+    var running by remember { mutableStateOf<com.google.gson.JsonObject?>(null) }
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    var version by remember { mutableStateOf(0) }
+    var showManual by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+
+    LaunchedEffect(ticketId, version) {
+        br.com.vipdesk.mobile.ui.modules.apiGet("time-entry/ticket/$ticketId").onSuccess { body ->
+            entries = body.rows().first; totals = body.asJsonObject.obj("totals")
+        }
+        br.com.vipdesk.mobile.ui.modules.apiGet("time-entry/my-running").onSuccess { body ->
+            val o = body.asJsonObject
+            running = (o.obj("data") ?: o.arr("data")?.objects()?.firstOrNull())
+        }
+    }
+    LaunchedEffect(running) { while (running != null) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(1000) } }
+
+    val runningHere = running?.int("ticket_id") == ticketId
+    val startedMs = running?.str("started_at")?.let { br.com.vipdesk.mobile.ui.common.parseApiDate(it)?.time }
+    val elapsed = if (runningHere && startedMs != null) ((now - startedMs) / 1000).coerceAtLeast(0) else 0L
+    fun hms(sec: Long) = "%02d:%02d:%02d".format(sec / 3600, (sec % 3600) / 60, sec % 60)
+
+    if (showManual) br.com.vipdesk.mobile.ui.modules.TextPromptSheet(
+        title = "Lançar horas", hint = "Minutos trabalhados e descrição. Ex.: 45 Ajuste de configuração", confirmLabel = "Lançar", minLines = 2,
+        onDismiss = { showManual = false }
+    ) { text ->
+        val mins = Regex("^\\s*(\\d+)").find(text)?.groupValues?.get(1)?.toIntOrNull()
+        if (mins == null || mins <= 0) Result.failure(Exception("Comece com a quantidade de minutos, ex.: 30 Reunião"))
+        else {
+            val started = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(System.currentTimeMillis() - mins * 60_000L))
+            br.com.vipdesk.mobile.ui.modules.apiPost("time-entry", br.com.vipdesk.mobile.ui.modules.json(
+                "ticket_id" to ticketId, "started_at" to started, "duration_minutes" to mins,
+                "description" to text.replaceFirst(Regex("^\\s*\\d+\\s*"), "").ifBlank { null }
+            )).map { version++; "$mins min lançados" }
+        }
+    }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xFF111827)).padding(14.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Column(Modifier.weight(1f)) {
-                Text("CRONÔMETRO", fontSize = 10.sp, color = Color.White.copy(alpha = 0.7f))
-                Text("00:00:00", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                Text(if (runningHere) "EM ANDAMENTO" else if (running != null) "CRONÔMETRO ATIVO EM OUTRO TICKET" else "CRONÔMETRO", fontSize = 10.sp, color = Color.White.copy(alpha = 0.7f))
+                Text(hms(elapsed), fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
             }
             Box(
-                Modifier.size(48.dp).background(c.primary, CircleShape).clickable { onToast(WEB_ONLY) },
+                Modifier.size(48.dp).background(if (runningHere) Color(0xFFEF4444) else c.primary, CircleShape).clickable(enabled = !busy) {
+                    busy = true
+                    scope.launch {
+                        val r = if (runningHere) br.com.vipdesk.mobile.ui.modules.apiPost("time-entry/${running?.int("id")}/stop").map { "Worklog finalizado" }
+                        else br.com.vipdesk.mobile.ui.modules.apiPost("time-entry/start", br.com.vipdesk.mobile.ui.modules.json("ticket_id" to ticketId)).map { "Cronômetro iniciado" }
+                        r.fold({ onToast(it); version++ }, { onToast(it.message ?: "Falha") })
+                        busy = false
+                    }
+                },
                 contentAlignment = Alignment.Center
-            ) { Text("▶", color = Color.White, fontSize = 18.sp) }
+            ) { Text(if (runningHere) "■" else "▶", color = Color.White, fontSize = 18.sp) }
         }
-        Text("Worklog e horas faturáveis são lançados na versão web por enquanto.", fontSize = 12.sp, color = c.muted)
-        Text("+ lançar horas manualmente", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.primary, modifier = Modifier.clickable { onToast(WEB_ONLY) })
+        totals?.let { tt ->
+            val total = tt.int("total_minutes") ?: 0; val bill = tt.int("billable_minutes") ?: 0
+            Text("Total ${total / 60}h${(total % 60).toString().padStart(2, '0')} · faturável ${bill / 60}h${(bill % 60).toString().padStart(2, '0')}" + ((tt.int("pending_minutes") ?: 0).takeIf { it > 0 }?.let { " · $it min aguardando aprovação" } ?: ""), fontSize = 12.sp, color = c.muted)
+        }
+        Text("+ lançar horas manualmente", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.primary, modifier = Modifier.clickable { showManual = true })
+        if (entries.isEmpty()) Text("Nenhum lançamento neste ticket.", fontSize = 12.sp, color = c.muted)
+        entries.forEach { e ->
+            val mins = e.int("duration_minutes") ?: 0
+            VdCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(e.obj("user")?.str("name") ?: "—", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.text, modifier = Modifier.weight(1f))
+                    Text(if (e.str("ended_at") == null) "em curso" else "${mins / 60}h${(mins % 60).toString().padStart(2, '0')}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.primary)
+                }
+                Text(listOfNotNull(br.com.vipdesk.mobile.ui.modules.fmtDate(e.str("started_at"), "dd/MM HH:mm"), e.str("activity_type"), e.str("approval_status") ?: e.str("status")).joinToString(" · "), fontSize = 11.sp, color = c.muted)
+                e.str("description")?.let { Text(it, fontSize = 12.sp, color = c.text, modifier = Modifier.padding(top = 2.dp)) }
+            }
+        }
     }
 }
 

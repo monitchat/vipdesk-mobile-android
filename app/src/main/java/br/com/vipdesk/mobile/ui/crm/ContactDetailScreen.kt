@@ -64,7 +64,6 @@ import br.com.vipdesk.mobile.ui.theme.Tint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val WEB_ONLY = "Disponível na versão web"
 
 /** Contato 360 (tela 20) — contato, conversas e negócios reais. */
 @Composable
@@ -102,6 +101,11 @@ fun ContactDetailScreen(
     }
 
     val p = contact
+    var showSchedule by remember { mutableStateOf(false) }
+    if (showSchedule && p != null) br.com.vipdesk.mobile.ui.agenda.AppointmentCreateSheet(
+        onDismiss = { showSchedule = false }, onCreated = { toast = it },
+        contactId = p.id, contactName = p.name, phoneNumber = p.phoneNumber
+    )
     Box(Modifier.fillMaxSize().background(c.background)) {
         Column(Modifier.fillMaxSize()) {
             VdSubHeader(
@@ -134,7 +138,7 @@ fun ContactDetailScreen(
                                 if (p.phoneNumber.isNullOrBlank()) toast = "Contato sem telefone"
                                 else try { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${p.phoneNumber}"))) } catch (_: Exception) {}
                             }
-                            QuickAction(Icons.Outlined.CalendarMonth, "Agendar", c.textTertiary, Modifier.weight(1f)) { toast = WEB_ONLY }
+                            QuickAction(Icons.Outlined.CalendarMonth, "Agendar", c.textTertiary, Modifier.weight(1f)) { showSchedule = true }
                         }
                         Spacer(Modifier.height(6.dp))
                         VdTabs(
@@ -190,7 +194,8 @@ fun ContactDetailScreen(
                                 }
                             }
                         }
-                        else -> Text("Documentos e consentimentos LGPD ficam na versão web.", fontSize = 13.sp, color = c.muted, modifier = Modifier.padding(8.dp))
+                        tab == "Docs" -> ContactDocsTab(contactId) { toast = it }
+                        else -> ContactLgpdTab(contactId) { toast = it }
                     }
                     Spacer(Modifier.height(24.dp))
                 }

@@ -64,7 +64,6 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-private const val WEB_ONLY = "Disponível na versão web"
 private val ISO = "yyyy-MM-dd"
 
 /** Visual do status do agendamento: (fundo, borda, rótulo, texto). */
@@ -96,6 +95,8 @@ fun AgendaScreen(onConversationClick: (Int) -> Unit, onToast: (String) -> Unit) 
     var error by remember { mutableStateOf<String?>(null) }
     var reloadTick by remember { mutableIntStateOf(0) }
     var sheet by remember { mutableStateOf<Appointment?>(null) }
+    var showCreate by remember { mutableStateOf(false) }
+    if (showCreate) AppointmentCreateSheet(onDismiss = { showCreate = false }, onCreated = { onToast(it); reloadTick++ })
 
     val weekStart = remember(weekOffset) {
         Calendar.getInstance().apply {
@@ -130,7 +131,7 @@ fun AgendaScreen(onConversationClick: (Int) -> Unit, onToast: (String) -> Unit) 
                     )
                 }
             }
-            VdHeaderIcon(Icons.Outlined.AddCircleOutline, "Novo agendamento", { onToast(WEB_ONLY) }, tint = c.primary)
+            VdHeaderIcon(Icons.Outlined.AddCircleOutline, "Novo agendamento", { showCreate = true }, tint = c.primary)
         }
 
         // Faixa de dias
@@ -214,7 +215,20 @@ fun AgendaScreen(onConversationClick: (Int) -> Unit, onToast: (String) -> Unit) 
                     Text(a.notes, fontSize = 12.sp, color = c.textTertiary, modifier = Modifier.background(c.surfaceSoft, RoundedCornerShape(8.dp)).border(1.dp, c.divider, RoundedCornerShape(8.dp)).padding(10.dp))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    VdButton("Reenviar", onClick = { onToast(WEB_ONLY) }, style = VdButtonStyle.Secondary, icon = Icons.Outlined.Send, height = 40.dp, modifier = Modifier.weight(1f))
+                    VdButton("Lembrar", onClick = {
+                        // Lembrete pelo WhatsApp na conversa do contato (dentro da janela de 24h)
+                        val cid = a.contactId
+                        if (cid == null) onToast("Agendamento sem contato") else scope.launch {
+                            AppContainer.crmRepository.getContactConversationId(cid).onSuccess { convId ->
+                                if (convId == null) { onToast("Contato ainda não possui conversa"); return@onSuccess }
+                                val whenTxt = a.startDate?.let { parse(it) }?.let { SimpleDateFormat("dd/MM 'às' HH:mm", Locale("pt", "BR")).format(it.time) } ?: ""
+                                val msg = "Olá${a.contact?.let { ", $it" } ?: ""}! Lembrando do seu agendamento${a.service?.let { " de $it" } ?: ""} em $whenTxt. Podemos confirmar?"
+                                AppContainer.conversationRepository.sendTextMessage(convId, msg).fold(
+                                    { onToast("Lembrete enviado no WhatsApp") }, { onToast(it.message ?: "Não foi possível enviar") }
+                                )
+                            }
+                        }
+                    }, style = VdButtonStyle.Secondary, icon = Icons.Outlined.Send, height = 40.dp, modifier = Modifier.weight(1f))
                     VdButton("Conversar", onClick = {
                         val cid = a.contactId
                         if (cid == null) onToast("Agendamento sem contato") else scope.launch {

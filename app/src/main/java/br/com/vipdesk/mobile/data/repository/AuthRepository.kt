@@ -3,6 +3,7 @@ package br.com.vipdesk.mobile.data.repository
 import android.util.Base64
 import br.com.vipdesk.mobile.data.api.ApiService
 import br.com.vipdesk.mobile.data.local.TokenManager
+import br.com.vipdesk.mobile.data.model.CompanyOption
 import br.com.vipdesk.mobile.data.model.LoginRequest
 import br.com.vipdesk.mobile.data.model.LoginResponse
 import br.com.vipdesk.mobile.data.model.MfaChallenge
@@ -20,11 +21,12 @@ class AuthRepository(
     sealed class LoginOutcome {
         data object LoggedIn : LoginOutcome()
         data class MfaRequired(val challenge: MfaChallenge) : LoginOutcome()
+        data class SelectCompany(val companies: List<CompanyOption>) : LoginOutcome()
     }
 
-    suspend fun login(email: String, password: String): Result<LoginOutcome> {
+    suspend fun login(email: String, password: String, companyId: Int? = null): Result<LoginOutcome> {
         return try {
-            val response = apiService.login(LoginRequest(email, password))
+            val response = apiService.login(LoginRequest(email, password, companyId))
             handleAuthResponse(response, email)
         } catch (e: java.net.UnknownHostException) {
             Result.failure(Exception("Sem conexao com a internet"))
@@ -58,6 +60,9 @@ class AuthRepository(
     private suspend fun handleAuthResponse(response: retrofit2.Response<LoginResponse>, email: String): Result<LoginOutcome> {
         val body = response.body()
         if (response.isSuccessful && body != null) {
+            if (body.status == "select_company" || (body.multipleCompanies && !body.companies.isNullOrEmpty())) {
+                return Result.success(LoginOutcome.SelectCompany(body.companies.orEmpty()))
+            }
             if (body.mfaRequired && !body.mfaToken.isNullOrBlank()) {
                 return Result.success(LoginOutcome.MfaRequired(MfaChallenge(body.mfaToken, body.mfaMethod ?: "totp", body.emailHint)))
             }

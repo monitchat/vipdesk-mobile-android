@@ -181,6 +181,27 @@ object KanbanStore {
         }
     }
 
+    /** Membros do quadro (para atribuição); cai para usuários da empresa se vier vazio. */
+    suspend fun members(): List<Pair<Int, String>> {
+        val bId = boardId ?: return emptyList()
+        val fromBoard = runCatching { api.getRaw("kanban/boards/$bId/members") }.getOrNull()?.body()?.let { b ->
+            val arr = if (b.isJsonArray) b.asJsonArray else b.asJsonObject.arr("data")
+            arr?.mapNotNull { e -> e.takeIf { it.isJsonObject }?.asJsonObject?.let { m -> val u = m.obj("user") ?: m; (u.get("id")?.takeIf { !it.isJsonNull }?.asInt ?: m.get("user_id")?.asInt)?.let { it to (u.str("name") ?: "—") } } }
+        }.orEmpty()
+        if (fromBoard.isNotEmpty()) return fromBoard
+        return AppContainer.mobileRepository.getAgents().getOrNull()?.map { it.id to it.name }.orEmpty()
+    }
+
+    suspend fun assign(cardId: String, userId: Int, userName: String): Result<Unit> {
+        val bId = boardId ?: return Result.failure(Exception("Sem quadro"))
+        return runCatching {
+            val body = JsonObject().apply { add("assignee_ids", com.google.gson.JsonArray().apply { add(userId) }) }
+            val r = api.putRaw("kanban/boards/$bId/tasks/$cardId", body)
+            if (!r.isSuccessful) throw Exception(br.com.vipdesk.mobile.ui.modules.apiError(r.errorBody()?.string(), "Não foi possível atribuir (${r.code()})"))
+            columns = columns.map { col -> col.copy(cards = col.cards.map { c -> if (c.id == cardId) c.copy(assignee = userName) else c }) }
+        }
+    }
+
     suspend fun loadChecklist(cardId: String) {
         val bId = boardId ?: return
         val taskId = cardId.toIntOrNull() ?: return

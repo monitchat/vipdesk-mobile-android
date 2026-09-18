@@ -47,6 +47,7 @@ import br.com.vipdesk.mobile.ui.components.VdTag
 import br.com.vipdesk.mobile.ui.theme.AppTheme
 import br.com.vipdesk.mobile.ui.theme.Tint
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Lista de contatos (tela 21) — GET contact real, seções alfabéticas. */
 @Composable
@@ -60,17 +61,75 @@ fun ContactsListScreen(
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf("Todos") }
     var contacts by remember { mutableStateOf<List<ApiContact>>(emptyList()) }
+    var total by remember { mutableStateOf(0) }
     var loading by remember { mutableStateOf(true) }
+    var loadingMore by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    val pageSize = 50
+    val importScope = androidx.compose.runtime.rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var importing by remember { mutableStateOf(false) }
+    // Importação em 2 passos, igual ao web: file/excel/getArrayFromExcel (base64 → tmp_file no Spaces)
+    // e depois contact/import com o tmp_file (processado em fila no backend).
+    val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        importing = true
+        onToast("Enviando planilha…")
+        importScope.launch {
+            try {
+                val resolver = context.contentResolver
+                var name = "contatos.xlsx"
+                resolver.query(uri, null, null, null, null)?.use { cur -> if (cur.moveToFirst()) { val i = cur.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME); if (i >= 0) name = cur.getString(i) } }
+                val ext = name.substringAfterLast('.', "xlsx").lowercase()
+                if (ext !in listOf("xlsx", "xls", "csv")) { onToast("Use uma planilha .xlsx, .xls ou .csv"); return@launch }
+                val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { resolver.openInputStream(uri)?.use { it.readBytes() } } ?: throw Exception("Não foi possível ler o arquivo")
+                val mime = resolver.getType(uri) ?: "application/octet-stream"
+                val dataUrl = "data:$mime;base64," + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                val up = br.com.vipdesk.mobile.ui.modules.apiPost("file/excel/getArrayFromExcel", br.com.vipdesk.mobile.ui.modules.json("data" to dataUrl, "ext" to ext, "actual_file" to "")).getOrThrow()
+                val tmp = up.asJsonObject.get("tmp_file")?.takeIf { !it.isJsonNull }?.asString ?: throw Exception("Upload sem arquivo temporário")
+                br.com.vipdesk.mobile.ui.modules.apiPost("contact/import", br.com.vipdesk.mobile.ui.modules.json(
+                    "tmp_file" to tmp, "actual_file" to tmp, "excel_import_src" to tmp, "excel_import_name" to name, "ext" to ext
+                )).getOrThrow()
+                onToast("Importação iniciada — os contatos aparecem em alguns minutos")
+            } catch (e: Exception) {
+                onToast(e.message ?: "Falha na importação")
+            } finally { importing = false }
+        }
+    }
 
     LaunchedEffect(query, CrmEvents.contactsVersion) {
         loading = true
         if (query.isNotBlank()) delay(400)
-        AppContainer.crmRepository.searchContacts(query, take = 100).fold(
-            onSuccess = { contacts = it; error = null },
+        AppContainer.crmRepository.searchContactsPage(query, take = pageSize).fold(
+            onSuccess = { contacts = it.items; total = it.total; error = null },
             onFailure = { error = it.message }
         )
         loading = false
+    }
+    // Scroll infinito: próxima página quando o fim da lista aparece
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val nearEnd by remember {
+        androidx.compose.runtime.derivedStateOf {
+            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            last >= listState.layoutInfo.totalItemsCount - 4
+        }
+    }
+    // Carrega em escopo próprio: um LaunchedEffect re-executado cancelaria a página em voo
+    // e deixaria `loadingMore` preso em true.
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    LaunchedEffect(nearEnd, contacts.size) {
+        if (nearEnd && !loading && !loadingMore && contacts.size < total) {
+            loadingMore = true
+            scope.launch {
+                try {
+                    AppContainer.crmRepository.searchContactsPage(query, take = pageSize, skip = contacts.size).onSuccess { page ->
+                        val known = contacts.map { it.id }.toSet()
+                        contacts = contacts + page.items.filter { it.id !in known }
+                        total = page.total
+                    }
+                } finally { loadingMore = false }
+            }
+        }
     }
 
     val visible = when (filter) {
@@ -82,10 +141,10 @@ fun ContactsListScreen(
     Column(Modifier.fillMaxSize().background(c.surface)) {
         VdSubHeader(
             title = "Contatos",
-            subtitle = "Relacionamento · ${contacts.size} contatos",
+            subtitle = "Relacionamento · $total contatos",
             onBack = onBack,
             actions = {
-                VdHeaderIcon(Icons.Outlined.UploadFile, "Importar", { onToast("Importação disponível na versão web") })
+                VdHeaderIcon(Icons.Outlined.UploadFile, "Importar", { if (!importing) importLauncher.launch("*/*") })
                 VdHeaderIcon(Icons.Outlined.PersonAddAlt, "Novo contato", onCreateContact, tint = c.primary)
             },
             below = {
@@ -101,7 +160,7 @@ fun ContactsListScreen(
             loading && contacts.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.primary) }
             error != null -> VdEmptyState(Icons.Outlined.PersonSearch, "Não foi possível carregar", error ?: "")
             visible.isEmpty() -> VdEmptyState(Icons.Outlined.PersonSearch, "Nenhum contato encontrado", "Tente outro termo ou cadastre um novo.", ctaLabel = "Novo contato", onCta = onCreateContact)
-            else -> LazyColumn(Modifier.fillMaxSize()) {
+            else -> LazyColumn(Modifier.fillMaxSize(), state = listState) {
                 val grouped = visible.groupBy { it.name.firstOrNull()?.uppercaseChar()?.takeIf { ch -> ch.isLetter() } ?: '#' }
                 grouped.toSortedMap().forEach { (letter, list) ->
                     item(key = "h$letter") {
@@ -113,6 +172,9 @@ fun ContactsListScreen(
                     list.forEach { contact ->
                         item(key = contact.id) { ContactRow(contact) { onContactClick(contact.id) } }
                     }
+                }
+                if (loadingMore) item("loading-more") {
+                    Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.primary, modifier = Modifier.size(22.dp)) }
                 }
                 item { Spacer(Modifier.height(24.dp)) }
             }

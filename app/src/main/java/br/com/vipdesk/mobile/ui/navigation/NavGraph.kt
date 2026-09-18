@@ -59,12 +59,16 @@ object Routes {
     const val REPORTS = "reports"
     const val SEARCH = "search"
     const val SETTINGS = "settings"
+    const val MODULE = "module/{key}"
+    const val INTERNAL_CHAT = "internalchat/{chatId}?title={title}"
 
     fun conversationDetail(conversationId: Int) = "conversation/$conversationId"
     fun ticketDetail(ticketId: Int) = "ticket/$ticketId"
     fun contactDetail(contactId: Int) = "contact/$contactId"
     fun dealDetail(dealId: Int) = "deal/$dealId"
     fun kanbanCard(cardId: String) = "kanban/card/$cardId"
+    fun module(key: String) = "module/$key"
+    fun internalChat(chatId: Int, title: String) = "internalchat/$chatId?title=${android.net.Uri.encode(title)}"
 }
 
 @Composable
@@ -159,7 +163,8 @@ fun VipDeskNavHost() {
                     onOpenReports = { navController.navigate(Routes.REPORTS) },
                     onOpenSearch = { navController.navigate(Routes.SEARCH) },
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                    onLogout = logout
+                    onLogout = logout,
+                    onOpenModule = { navController.navigate(Routes.module(it)) }
                 )
             )
         }
@@ -239,7 +244,27 @@ fun VipDeskNavHost() {
             SearchScreen(onBack = back, onContactClick = openContact, onTicketClick = openTicket)
         }
 
-        composable(Routes.SETTINGS) { ProfileScreen(onBack = back, onLogout = logout) }
+        composable(Routes.SETTINGS) { ProfileScreen(onBack = back, onLogout = logout, onOpenModule = { navController.navigate(Routes.module(it)) }) }
+
+        // Módulos "somente web" do design que têm endpoint (campanhas, KB, aprovações, ...)
+        composable(Routes.MODULE, arguments = listOf(navArgument("key") { type = NavType.StringType })) { entry ->
+            val key = entry.arguments?.getString("key") ?: return@composable
+            br.com.vipdesk.mobile.ui.modules.ModuleScreen(
+                key,
+                br.com.vipdesk.mobile.ui.modules.ModuleNav(
+                    onBack = back, onOpenTicket = openTicket, onOpenConversation = openConversation,
+                    onOpenContact = openContact, onOpenDeal = openDeal,
+                    onOpenChat = { id, title -> navController.navigate(Routes.internalChat(id, title)) }
+                )
+            )
+        }
+        composable(
+            Routes.INTERNAL_CHAT,
+            arguments = listOf(navArgument("chatId") { type = NavType.IntType }, navArgument("title") { type = NavType.StringType; defaultValue = "Chat" })
+        ) { entry ->
+            val chatId = entry.arguments?.getInt("chatId") ?: return@composable
+            br.com.vipdesk.mobile.ui.modules.InternalChatRoomScreen(chatId, entry.arguments?.getString("title") ?: "Chat", back)
+        }
     }
 
     // Fluxos de criação acionados por telas empilhadas (lista de tickets, contatos, kanban de negócios)

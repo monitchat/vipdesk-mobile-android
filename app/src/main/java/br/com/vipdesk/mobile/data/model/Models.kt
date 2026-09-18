@@ -6,8 +6,13 @@ import com.google.gson.annotations.SerializedName
 
 data class LoginRequest(
     val email: String,
-    val password: String
+    val password: String,
+    // Credencial válida em mais de uma empresa: o login responde `select_company`
+    // e o app reenvia com a empresa escolhida (tela 05).
+    @SerializedName("company_id") val companyId: Int? = null
 )
+
+data class CompanyOption(val id: Int, val name: String? = null)
 
 data class LoginResponse(
     @SerializedName("access_token") val token: String? = null,
@@ -17,7 +22,10 @@ data class LoginResponse(
     @SerializedName("mfa_required") val mfaRequired: Boolean = false,
     @SerializedName("mfa_token") val mfaToken: String? = null,
     @SerializedName("mfa_method") val mfaMethod: String? = null,
-    @SerializedName("email_hint") val emailHint: String? = null
+    @SerializedName("email_hint") val emailHint: String? = null,
+    val status: String? = null,
+    @SerializedName("multiple_companies") val multipleCompanies: Boolean = false,
+    val companies: List<CompanyOption>? = null
 )
 
 data class MfaVerifyRequest(
@@ -544,7 +552,7 @@ data class LossReason(val id: Int, val name: String = "")
 
 data class LossReasonListResponse(val data: List<LossReason> = emptyList())
 
-data class MobileTicketsEnvelope(val data: List<TicketListItem> = emptyList())
+data class MobileTicketsEnvelope(val data: List<TicketListItem> = emptyList(), val total: Int? = null)
 
 data class TicketListItem(
     val id: Int,

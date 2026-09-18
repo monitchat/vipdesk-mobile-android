@@ -53,6 +53,7 @@ import br.com.vipdesk.mobile.ui.crm.CrmHubScreen
 import br.com.vipdesk.mobile.ui.helpdesk.HelpdeskHubScreen
 import br.com.vipdesk.mobile.ui.theme.AppTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Destinos que a shell pode abrir a partir das abas e da gaveta "Mais". */
 class ShellNav(
@@ -69,7 +70,8 @@ class ShellNav(
     val onOpenReports: () -> Unit,
     val onOpenSearch: () -> Unit,
     val onOpenSettings: () -> Unit,
-    val onLogout: () -> Unit
+    val onLogout: () -> Unit,
+    val onOpenModule: (String) -> Unit = {}
 )
 
 private data class TabItem(
@@ -93,6 +95,27 @@ fun MainShell(nav: ShellNav) {
             delay(2200)
             toast = null
         }
+    }
+
+    // Ao voltar do segundo plano: reconecta o socket se caiu e atualiza badges/presença
+    val shellLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(shellLifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                kotlinx.coroutines.MainScope().launch {
+                    val userId = AppContainer.tokenManager.getUserId()
+                    val companyId = AppContainer.tokenManager.getCompanyId()
+                    if (userId != null && companyId != null && !AppContainer.socketService.isConnected) {
+                        AppContainer.socketService.connect(companyId, userId)
+                    }
+                    refreshCounts { counts = it }
+                    br.com.vipdesk.mobile.data.session.PresenceState.refresh()
+                    AppContainer.mobileRepository.getNotifications(onlyUnread = true).onSuccess { (_, n) -> unreadNotifications = n }
+                }
+            }
+        }
+        shellLifecycle.lifecycle.addObserver(observer)
+        onDispose { shellLifecycle.lifecycle.removeObserver(observer) }
     }
 
     // Socket em tempo real desde a entrada no app (alimenta listas, badges e
@@ -146,7 +169,8 @@ fun MainShell(nav: ShellNav) {
                         onNotifications = nav.onNotificationsClick,
                         onCreateTicket = { createFlow = CreateFlow.TICKET },
                         onToast = { toast = it },
-                        unreadNotifications = unreadNotifications
+                        unreadNotifications = unreadNotifications,
+                        onOpenModule = nav.onOpenModule
                     )
                     2 -> CrmHubScreen(
                         onOpenDeals = nav.onDealsKanban,
@@ -155,7 +179,8 @@ fun MainShell(nav: ShellNav) {
                         onSearch = nav.onOpenSearch,
                         onNotifications = nav.onNotificationsClick,
                         onToast = { toast = it },
-                        unreadNotifications = unreadNotifications
+                        unreadNotifications = unreadNotifications,
+                        onOpenModule = nav.onOpenModule
                     )
                     3 -> AgendaScreen(
                         onConversationClick = nav.onConversationClick,
@@ -230,7 +255,8 @@ fun MainShell(nav: ShellNav) {
             onOpenSettings = nav.onOpenSettings,
             onOpenNotifications = nav.onNotificationsClick,
             onLogout = nav.onLogout,
-            onToast = { toast = it }
+            onToast = { toast = it },
+            onOpenModule = nav.onOpenModule
         )
     }
 

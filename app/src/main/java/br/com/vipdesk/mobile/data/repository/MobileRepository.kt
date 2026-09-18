@@ -56,11 +56,14 @@ class MobileRepository(private val apiService: ApiService) {
         }
     }
 
-    suspend fun getTickets(status: String, query: String): Result<List<TicketListItem>> {
+    data class TicketPage(val items: List<TicketListItem>, val total: Int?)
+
+    suspend fun getTickets(status: String, query: String, skip: Int = 0, take: Int = 80): Result<TicketPage> {
         return try {
-            val response = apiService.getMobileTickets(status, query.ifBlank { null })
+            val response = apiService.getMobileTickets(status, query.ifBlank { null }, skip, take)
             if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!.data)
+                val body = response.body()!!
+                Result.success(TicketPage(body.data, body.total))
             } else {
                 Result.failure(Exception("Erro ao carregar tickets"))
             }

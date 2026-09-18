@@ -23,6 +23,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -68,7 +70,7 @@ fun TicketsScreen(
     Column(Modifier.fillMaxSize().background(c.background)) {
         VdSubHeader(
             title = "Tickets",
-            subtitle = "Helpdesk › Tickets · ${state.items.size} resultados",
+            subtitle = "Helpdesk › Tickets · ${state.total ?: state.items.size} resultados",
             onBack = onBack ?: {},
             actions = {
                 VdHeaderIcon(Icons.Outlined.AddCircleOutline, "Novo ticket", onCreateTicket, tint = c.primary)
@@ -103,12 +105,29 @@ fun TicketsScreen(
                 ctaLabel = "Criar ticket",
                 onCta = onCreateTicket
             )
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 24.dp)
-            ) {
-                items(state.items, key = { it.id }) { t -> TicketCard(t) { onTicketClick(t.id) } }
+            else -> {
+                val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                // Pede a próxima página quando o último item fica visível
+                val nearEnd by remember {
+                    derivedStateOf {
+                        val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                        last >= listState.layoutInfo.totalItemsCount - 3
+                    }
+                }
+                LaunchedEffect(nearEnd, state.items.size) { if (nearEnd && state.hasMore) viewModel.loadMore() }
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 24.dp)
+                ) {
+                    items(state.items, key = { it.id }) { t -> TicketCard(t) { onTicketClick(t.id) } }
+                    if (state.isLoadingMore) item("loading-more") {
+                        Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = c.primary, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                }
             }
         }
     }

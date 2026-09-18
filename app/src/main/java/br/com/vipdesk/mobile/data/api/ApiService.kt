@@ -107,6 +107,20 @@ interface ApiService {
     @GET("user/{id}/info/")
     suspend fun getUserInfoRaw(@Path("id") userId: Int): Response<com.google.gson.JsonObject>
 
+    // ============ GENÉRICO (módulos de lista: campanhas, KB, aprovações, etc.) ============
+
+    @GET
+    suspend fun getRaw(@Url path: String, @QueryMap params: Map<String, String> = emptyMap()): Response<com.google.gson.JsonElement>
+
+    @POST
+    suspend fun postRaw(@Url path: String, @Body body: com.google.gson.JsonObject = com.google.gson.JsonObject()): Response<com.google.gson.JsonElement>
+
+    @PUT
+    suspend fun putRaw(@Url path: String, @Body body: com.google.gson.JsonObject = com.google.gson.JsonObject()): Response<com.google.gson.JsonElement>
+
+    @DELETE
+    suspend fun deleteRaw(@Url path: String): Response<com.google.gson.JsonElement>
+
     // ============ KANBAN (quadros de tarefas) ============
 
     @GET("kanban/boards")
@@ -312,7 +326,9 @@ interface ApiService {
     @GET("mobile/tickets")
     suspend fun getMobileTickets(
         @Query("status") status: String = "open",
-        @Query("q") q: String? = null
+        @Query("q") q: String? = null,
+        @Query("skip") skip: Int = 0,
+        @Query("take") take: Int = 80
     ): Response<MobileTicketsEnvelope>
 
     @GET("mobile/notifications")

@@ -36,7 +36,7 @@ fun parseApiDate(dateStr: String?): java.util.Date? {
     val cleaned = dateStr.replace(Regex("\\.\\d+"), "")
     val patterns = if (cleaned.contains('T'))
         listOf("yyyy-MM-dd'T'HH:mm:ss'Z'" to true, "yyyy-MM-dd'T'HH:mm:ssXXX" to false, "yyyy-MM-dd'T'HH:mm:ss" to false)
-    else listOf("yyyy-MM-dd HH:mm:ss" to false, "yyyy-MM-dd" to false)
+    else listOf("yyyy-MM-dd HH:mm:ss" to false, "yyyy-MM-dd HH:mm" to false, "dd/MM/yyyy HH:mm:ss" to false, "dd/MM/yyyy HH:mm" to false, "yyyy-MM-dd" to false)
     for ((p, utc) in patterns) {
         try {
             val fmt = java.text.SimpleDateFormat(p, java.util.Locale("pt", "BR"))

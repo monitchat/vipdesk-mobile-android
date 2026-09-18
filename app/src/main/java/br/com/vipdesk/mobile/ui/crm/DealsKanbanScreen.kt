@@ -29,6 +29,15 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import br.com.vipdesk.mobile.ui.components.VdToast
+import br.com.vipdesk.mobile.ui.components.rememberDragBoardState
+import br.com.vipdesk.mobile.ui.components.dropHighlight
+import br.com.vipdesk.mobile.ui.components.dragColumn
+import br.com.vipdesk.mobile.ui.components.dragCard
+import br.com.vipdesk.mobile.ui.components.DragOverlay
+import br.com.vipdesk.mobile.ui.components.DragBoardState
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,11 +79,15 @@ fun DealsKanbanScreen(
     var pipelines by remember { mutableStateOf<List<DealPipeline>>(emptyList()) }
     var pipeline by remember { mutableStateOf<DealPipeline?>(null) }
     var deals by remember { mutableStateOf<List<ApiDeal>>(emptyList()) }
+    val drag = rememberDragBoardState()
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var showPipelines by remember { mutableStateOf(false) }
     var onlyMine by remember { mutableStateOf(false) }
     var myId by remember { mutableStateOf<Int?>(null) }
+    val scope = rememberCoroutineScope()
+    var toast by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(toast) { if (toast != null) { kotlinx.coroutines.delay(2200); toast = null } }
 
     LaunchedEffect(Unit) {
         myId = AppContainer.tokenManager.getUserId()
@@ -97,6 +110,7 @@ fun DealsKanbanScreen(
     val stages = pipeline?.stages.orEmpty()
     val scroll = rememberScrollState()
 
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(c.background)) {
         VdSubHeader(
             title = "Negócios",
@@ -131,7 +145,14 @@ fun DealsKanbanScreen(
                 ) {
                     stages.forEachIndexed { i, stage ->
                         val col = visible.filter { it.stage?.id == stage.id || it.stageId == stage.id }
-                        StageColumn(stage, col, STAGE_COLORS[i % STAGE_COLORS.size], onDealClick, onCreateDeal)
+                        StageColumn(stage, col, STAGE_COLORS[i % STAGE_COLORS.size], onDealClick, onCreateDeal, drag) { dealId, targetStageId ->
+                            scope.launch {
+                                AppContainer.crmRepository.moveDealStage(dealId.toInt(), targetStageId.toInt()).fold(
+                                    { toast = "Negócio movido"; CrmEvents.dealsVersion++ },
+                                    { toast = it.message ?: "Não foi possível mover" }
+                                )
+                            }
+                        }
                     }
                 }
                 // Indicador de colunas
@@ -150,6 +171,12 @@ fun DealsKanbanScreen(
                 }
             }
         }
+    }
+
+    DragOverlay(drag, widthDp = 270) {
+        deals.firstOrNull { it.id.toString() == drag.draggingId }?.let { d -> DealCard(d) {} }
+    }
+    toast?.let { Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 60.dp)) { VdToast(it) } }
     }
 
     if (showPipelines) {
@@ -175,10 +202,18 @@ fun DealsKanbanScreen(
 }
 
 @Composable
-private fun StageColumn(stage: DealStage, deals: List<ApiDeal>, color: Color, onDealClick: (Int) -> Unit, onCreateDeal: () -> Unit) {
+private fun StageColumn(
+    stage: DealStage, deals: List<ApiDeal>, color: Color, onDealClick: (Int) -> Unit, onCreateDeal: () -> Unit,
+    drag: DragBoardState, onDrop: (String, String) -> Unit
+) {
     val c = AppTheme.colors
     val sum = deals.sumOf { it.value ?: 0.0 }
-    Column(Modifier.width(290.dp).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(
+        Modifier.width(290.dp).fillMaxSize()
+            .dragColumn(drag, stage.id.toString())
+            .dropHighlight(drag, stage.id.toString(), c.primary),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         Row(Modifier.padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stage.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.text)
             Text(" · ${deals.size}", fontSize = 13.sp, color = c.muted, modifier = Modifier.weight(1f))
@@ -186,7 +221,9 @@ private fun StageColumn(stage: DealStage, deals: List<ApiDeal>, color: Color, on
         }
         Box(Modifier.fillMaxWidth().height(3.dp).background(if (stage.isWon) c.success else if (stage.isLost) c.danger else color, RoundedCornerShape(2.dp)))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            deals.forEach { deal -> DealCard(deal) { onDealClick(deal.id) } }
+            deals.forEach { deal ->
+                DealCard(deal, Modifier.dragCard(drag, deal.id.toString(), stage.id.toString(), onDrop = onDrop)) { onDealClick(deal.id) }
+            }
             if (!stage.isWon && !stage.isLost) {
                 Box(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).border(1.dp, c.border, RoundedCornerShape(10.dp))
@@ -200,10 +237,10 @@ private fun StageColumn(stage: DealStage, deals: List<ApiDeal>, color: Color, on
 }
 
 @Composable
-private fun DealCard(deal: ApiDeal, onClick: () -> Unit) {
+private fun DealCard(deal: ApiDeal, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = AppTheme.colors
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.surface).border(1.dp, c.divider, RoundedCornerShape(10.dp))
+        modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.surface).border(1.dp, c.divider, RoundedCornerShape(10.dp))
             .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {

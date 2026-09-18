@@ -72,6 +72,7 @@ import kotlinx.coroutines.delay
 fun ProfileScreen(
     onLogout: () -> Unit,
     onBack: (() -> Unit)? = null,
+    onOpenModule: (String) -> Unit = {},
     viewModel: ProfileViewModel = viewModel(factory = ProfileViewModel.Factory)
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -247,13 +248,10 @@ fun ProfileScreen(
                 VdCard(padding = 0.dp) {
                     Column(Modifier.padding(horizontal = 14.dp)) {
                         SettingRow(Icons.Outlined.Bolt, "Respostas rápidas", quickCount?.let { "$it salvas" } ?: "—") {
-                            toast = "Use o botão Templates no chat · cadastro na versão web"
-                        }
-                        SettingRow(Icons.Outlined.Draw, "Assinatura de mensagens", "Ativa") {
-                            toast = "Disponível na versão web"
+                            onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.QUICK_REPLIES)
                         }
                         SettingRow(Icons.Outlined.Translate, "Idioma", "Português (BR)") {
-                            toast = "Disponível na versão web"
+                            toast = "O app está disponível em Português (BR)"
                         }
                         SettingRow(Icons.Outlined.Info, "Sobre o VIPdesk", "v${br.com.vipdesk.mobile.BuildConfig.VERSION_NAME}", last = true) {
                             toast = "VIPdesk Mobile v${br.com.vipdesk.mobile.BuildConfig.VERSION_NAME}"

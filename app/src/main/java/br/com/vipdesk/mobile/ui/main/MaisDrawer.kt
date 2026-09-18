@@ -76,9 +76,11 @@ private data class DrawerItem(
     val action: DrawerAction
 )
 
-private enum class DrawerAction { DASHBOARD, REPORTS, SETTINGS, WEB_ONLY }
+private sealed class DrawerAction {
+    data object DASHBOARD : DrawerAction(); data object REPORTS : DrawerAction(); data object SETTINGS : DrawerAction()
+    data class MODULE(val key: String) : DrawerAction()
+}
 
-private const val WEB_ONLY = "Disponível na versão web"
 
 /** Gaveta "Mais" (tela 02): cabeçalho do usuário, grade de atalhos e lista. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,7 +92,8 @@ fun MaisDrawer(
     onOpenSettings: () -> Unit,
     onOpenNotifications: () -> Unit,
     onLogout: () -> Unit,
-    onToast: (String) -> Unit
+    onToast: (String) -> Unit,
+    onOpenModule: (String) -> Unit = {}
 ) {
     val c = AppTheme.colors
     val scope = rememberCoroutineScope()
@@ -107,21 +110,21 @@ fun MaisDrawer(
 
     val items = listOf(
         DrawerItem("Dashboard", Icons.Outlined.Speed, action = DrawerAction.DASHBOARD),
-        DrawerItem("Campanhas", Icons.Outlined.Campaign, action = DrawerAction.WEB_ONLY),
-        DrawerItem("DeskFlow", Icons.Outlined.AccountTree, action = DrawerAction.WEB_ONLY),
+        DrawerItem("Campanhas", Icons.Outlined.Campaign, action = DrawerAction.MODULE(br.com.vipdesk.mobile.ui.modules.ModuleKeys.CAMPAIGNS)),
+        DrawerItem("DeskFlow", Icons.Outlined.AccountTree, action = DrawerAction.MODULE(br.com.vipdesk.mobile.ui.modules.ModuleKeys.DESKFLOW)),
         DrawerItem("Relatórios", Icons.Outlined.BarChart, action = DrawerAction.REPORTS),
-        DrawerItem("Confirmações", Icons.Outlined.CheckBox, action = DrawerAction.WEB_ONLY),
-        DrawerItem("Cobranças", Icons.Outlined.MonetizationOn, action = DrawerAction.WEB_ONLY),
-        DrawerItem("Msgs. Classif.", Icons.Outlined.Sell, action = DrawerAction.WEB_ONLY),
-        DrawerItem("Base Legal", Icons.Outlined.Balance, addon = true, action = DrawerAction.WEB_ONLY),
-        DrawerItem("Pesquisas", Icons.Outlined.Star, action = DrawerAction.WEB_ONLY),
-        DrawerItem("Chat interno", Icons.Outlined.ChatBubbleOutline, action = DrawerAction.WEB_ONLY),
-        DrawerItem("Reuniões", Icons.Outlined.Videocam, action = DrawerAction.WEB_ONLY),
-        DrawerItem("Arena", Icons.Outlined.EmojiEvents, action = DrawerAction.WEB_ONLY),
+        DrawerItem("Confirmações", Icons.Outlined.CheckBox, action = DrawerAction.MODULE(br.com.vipdesk.mobile.ui.modules.ModuleKeys.CONFIRMATIONS)),
+        DrawerItem("Cobranças", Icons.Outlined.MonetizationOn, action = DrawerAction.MODULE(br.com.vipdesk.mobile.ui.modules.ModuleKeys.BILLING)),
+        DrawerItem("Msgs. Classif.", Icons.Outlined.Sell, action = DrawerAction.MODULE(br.com.vipdesk.mobile.ui.modules.ModuleKeys.SENTIMENT)),
+        DrawerItem("Base Legal", Icons.Outlined.Balance, addon = true, action = DrawerAction.MODULE(br.com.vipdesk.mobile.ui.modules.ModuleKeys.BASE_LEGAL)),
+        DrawerItem("Pesquisas", Icons.Outlined.Star, action = DrawerAction.MODULE(br.com.vipdesk.mobile.ui.modules.ModuleKeys.SURVEYS)),
+        DrawerItem("Chat interno", Icons.Outlined.ChatBubbleOutline, action = DrawerAction.MODULE(br.com.vipdesk.mobile.ui.modules.ModuleKeys.INTERNAL_CHAT)),
+        DrawerItem("Reuniões", Icons.Outlined.Videocam, action = DrawerAction.MODULE(br.com.vipdesk.mobile.ui.modules.ModuleKeys.MEETINGS)),
+        DrawerItem("Arena", Icons.Outlined.EmojiEvents, action = DrawerAction.MODULE(br.com.vipdesk.mobile.ui.modules.ModuleKeys.ARENA)),
         DrawerItem("Configurações", Icons.Outlined.Settings, gray = true, action = DrawerAction.SETTINGS),
-        DrawerItem("Administração", Icons.Outlined.Business, gray = true, action = DrawerAction.WEB_ONLY),
-        DrawerItem("Observab.", Icons.Outlined.MonitorHeart, gray = true, action = DrawerAction.WEB_ONLY),
-        DrawerItem("Plano", Icons.Outlined.WorkspacePremium, gray = true, action = DrawerAction.WEB_ONLY)
+        DrawerItem("Administração", Icons.Outlined.Business, gray = true, action = DrawerAction.MODULE(br.com.vipdesk.mobile.ui.modules.ModuleKeys.ADMIN)),
+        DrawerItem("Observab.", Icons.Outlined.MonitorHeart, gray = true, action = DrawerAction.MODULE(br.com.vipdesk.mobile.ui.modules.ModuleKeys.OBSERVABILITY)),
+        DrawerItem("Plano", Icons.Outlined.WorkspacePremium, gray = true, action = DrawerAction.MODULE(br.com.vipdesk.mobile.ui.modules.ModuleKeys.PLAN))
     )
 
     fun run(action: DrawerAction) {
@@ -130,7 +133,7 @@ fun MaisDrawer(
             DrawerAction.DASHBOARD -> onOpenDashboard()
             DrawerAction.REPORTS -> onOpenReports()
             DrawerAction.SETTINGS -> onOpenSettings()
-            DrawerAction.WEB_ONLY -> onToast(WEB_ONLY)
+            is DrawerAction.MODULE -> onOpenModule(action.key)
         }
     }
 
@@ -237,12 +240,12 @@ fun MaisDrawer(
             } else {
                 DrawerRow(Icons.Outlined.PauseCircle, "Entrar em pausa", trailing = "motivo ›") { showPause = true }
             }
-            DrawerRow(Icons.Outlined.StickyNote2, "Post-its") { onToast(WEB_ONLY) }
+            DrawerRow(Icons.Outlined.StickyNote2, "Post-its") { onDismiss(); onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.NOTES) }
             DrawerRow(Icons.Outlined.AccountCircle, "Perfil, MFA, treinamentos", caret = true) {
                 onDismiss(); onOpenSettings()
             }
             DrawerRow(Icons.AutoMirrored.Outlined.HelpOutline, "Ajuda e tour", trailing = "v${BuildConfig.VERSION_NAME}", muted = true) {
-                onToast(WEB_ONLY)
+                onDismiss(); onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.KB)
             }
             DrawerRow(Icons.AutoMirrored.Outlined.Logout, "Sair da conta", danger = true) {
                 onDismiss(); onLogout()

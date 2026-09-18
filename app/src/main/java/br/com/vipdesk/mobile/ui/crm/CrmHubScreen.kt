@@ -59,7 +59,6 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-private const val WEB_ONLY = "Disponível na versão web"
 
 /** Hub do CRM "Vendas" (tela 16). */
 @Composable
@@ -70,13 +69,15 @@ fun CrmHubScreen(
     onSearch: () -> Unit,
     onNotifications: () -> Unit,
     onToast: (String) -> Unit,
-    unreadNotifications: Int = 0
+    unreadNotifications: Int = 0,
+    onOpenModule: (String) -> Unit = {}
 ) {
     val c = AppTheme.colors
     var openDeals by remember { mutableStateOf<List<ApiDeal>>(emptyList()) }
     var wonMonth by remember { mutableStateOf<List<ApiDeal>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
 
+    LaunchedEffect(Unit) { if (br.com.vipdesk.mobile.ui.kanban.KanbanStore.boards.isEmpty()) br.com.vipdesk.mobile.ui.kanban.KanbanStore.load() }
     LaunchedEffect(CrmEvents.dealsVersion) {
         AppContainer.crmRepository.listDeals(null, "open", kanban = true).fold(
             onSuccess = { openDeals = it; error = null },
@@ -134,21 +135,21 @@ fun CrmHubScreen(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OpCard(Icons.Outlined.Contacts, "Relacionamento", "contatos · clientes · grupos", Modifier.weight(1f), onOpenContacts)
-                OpCard(Icons.Outlined.Repeat, "Cadências", "toques pendentes", Modifier.weight(1f)) { onToast(WEB_ONLY) }
+                OpCard(Icons.Outlined.Repeat, "Cadências", "sequências de toques", Modifier.weight(1f)) { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.CADENCES) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OpCard(Icons.Outlined.PhoneForwarded, "Discador", "campanhas de ligação", Modifier.weight(1f)) { onToast(WEB_ONLY) }
-                OpCard(Icons.Outlined.Description, "Orçamentos e contratos", "aguardando assinatura", Modifier.weight(1f)) { onToast(WEB_ONLY) }
+                OpCard(Icons.Outlined.PhoneForwarded, "Discador", "campanhas de ligação", Modifier.weight(1f)) { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.DIALER) }
+                OpCard(Icons.Outlined.Description, "Orçamentos e contratos", "propostas e aceites", Modifier.weight(1f)) { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.QUOTES) }
             }
 
             VdSectionLabel("Dashboards · SDR · CS · Configuração")
             VdCard(padding = 0.dp) {
-                ManageRow(Icons.AutoMirrored.Outlined.TrendingUp, "Dashboards (vendas, por vendedor, gerencial)") { onToast(WEB_ONLY) }
-                ManageRow(Icons.Outlined.TrackChanges, "SDR · agendamentos, performance, metas") { onToast(WEB_ONLY) }
-                ManageRow(Icons.Outlined.MonitorHeart, "Customer Success · saúde da carteira") { onToast(WEB_ONLY) }
-                ManageRow(Icons.Outlined.Language, "Landing pages · Link na bio") { onToast(WEB_ONLY) }
-                ManageRow(Icons.Outlined.EmojiEvents, "Metas · Comissões · Lead scoring") { onToast(WEB_ONLY) }
-                ManageRow(Icons.Outlined.Settings, "Pipelines · Produtos · Motivos de perda", last = true) { onToast(WEB_ONLY) }
+                ManageRow(Icons.AutoMirrored.Outlined.TrendingUp, "Dashboards (vendas, por vendedor, gerencial)") { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.SALES) }
+                ManageRow(Icons.Outlined.TrackChanges, "SDR · agendamentos, performance, metas") { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.SDR) }
+                ManageRow(Icons.Outlined.MonitorHeart, "Customer Success · carteira de clientes") { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.CLIENTS) }
+                ManageRow(Icons.Outlined.Language, "Landing pages · Link na bio") { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.LANDING) }
+                ManageRow(Icons.Outlined.EmojiEvents, "Metas · Comissões") { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.GOALS) }
+                ManageRow(Icons.Outlined.Settings, "Pipelines · Produtos · Motivos de perda", last = true) { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.PIPELINES) }
             }
             Spacer(Modifier.height(16.dp))
         }

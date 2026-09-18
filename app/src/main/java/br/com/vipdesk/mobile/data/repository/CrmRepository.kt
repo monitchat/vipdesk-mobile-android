@@ -19,11 +19,17 @@ import retrofit2.Response
 /** Contatos (CRM) e criação de tickets — endpoints reais da API v1. */
 class CrmRepository(private val apiService: ApiService) {
 
-    suspend fun searchContacts(search: String?, take: Int = 25): Result<List<ApiContact>> {
+    data class ContactPage(val items: List<ApiContact>, val total: Int)
+
+    suspend fun searchContacts(search: String?, take: Int = 25): Result<List<ApiContact>> =
+        searchContactsPage(search, take).map { it.items }
+
+    suspend fun searchContactsPage(search: String?, take: Int = 50, skip: Int = 0): Result<ContactPage> {
         return try {
-            val response = apiService.getContacts(search?.ifBlank { null }, take)
+            val response = apiService.getContacts(search?.ifBlank { null }, take, skip)
             if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!.data)
+                val body = response.body()!!
+                Result.success(ContactPage(body.data, body.totalRecords))
             } else {
                 Result.failure(Exception(errorMessage(response, "Erro ao carregar contatos")))
             }
