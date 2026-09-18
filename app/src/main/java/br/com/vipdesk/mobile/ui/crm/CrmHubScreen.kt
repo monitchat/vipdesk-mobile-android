@@ -77,7 +77,7 @@ fun CrmHubScreen(
     var wonMonth by remember { mutableStateOf<List<ApiDeal>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) { if (br.com.vipdesk.mobile.ui.kanban.KanbanStore.boards.isEmpty()) br.com.vipdesk.mobile.ui.kanban.KanbanStore.load() }
+    LaunchedEffect(Unit) { br.com.vipdesk.mobile.ui.kanban.KanbanStore.load() }
     LaunchedEffect(CrmEvents.dealsVersion) {
         AppContainer.crmRepository.listDeals(null, "open", kanban = true).fold(
             onSuccess = { openDeals = it; error = null },
@@ -104,6 +104,7 @@ fun CrmHubScreen(
             VdHeaderIcon(Icons.Outlined.Search, "Buscar", onSearch)
             VdHeaderIcon(Icons.Outlined.Notifications, "Notificações", onNotifications, badge = unreadNotifications)
         }
+        br.com.vipdesk.mobile.ui.components.VdPullRefresh(onRefresh = { CrmEvents.dealsVersion++; br.com.vipdesk.mobile.ui.kanban.KanbanStore.load() }) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -152,6 +153,7 @@ fun CrmHubScreen(
                 ManageRow(Icons.Outlined.Settings, "Pipelines · Produtos · Motivos de perda", last = true) { onOpenModule(br.com.vipdesk.mobile.ui.modules.ModuleKeys.PIPELINES) }
             }
             Spacer(Modifier.height(16.dp))
+        }
         }
     }
 }

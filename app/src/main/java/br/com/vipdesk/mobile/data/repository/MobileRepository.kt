@@ -119,7 +119,7 @@ class MobileRepository(private val apiService: ApiService) {
     /** Contadores de tickets do período — mesmo GET /statistic da web. */
     suspend fun getStatistics(period: String): Result<StatisticsResponse> {
         return try {
-            val response = apiService.getStatistics(statsFilter(period))
+            val response = apiService.getStatistics(statsFilter(period), noCache = 1)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
@@ -133,7 +133,7 @@ class MobileRepository(private val apiService: ApiService) {
     /** Distribuições por departamento/status/canal — GET /statistic/statisticsCount. */
     suspend fun getStatisticsCount(period: String): Result<StatisticsCountResponse> {
         return try {
-            val response = apiService.getStatisticsCount(statsFilter(period))
+            val response = apiService.getStatisticsCount(statsFilter(period), noCache = 1)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {

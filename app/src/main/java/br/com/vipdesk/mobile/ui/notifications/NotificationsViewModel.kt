@@ -30,6 +30,14 @@ class NotificationsViewModel(
         load()
     }
 
+    /** Puxar para atualizar. */
+    suspend fun refreshAwait() {
+        mobileRepository.getNotifications(_uiState.value.onlyUnread).fold(
+            onSuccess = { (items, unread) -> _uiState.value = _uiState.value.copy(items = items, unreadCount = unread, error = null) },
+            onFailure = { _uiState.value = _uiState.value.copy(error = it.message) }
+        )
+    }
+
     fun load() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)

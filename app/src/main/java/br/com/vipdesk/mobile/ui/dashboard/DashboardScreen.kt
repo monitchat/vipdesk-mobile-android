@@ -86,6 +86,7 @@ fun DashboardScreen(
             return@Column
         }
 
+        br.com.vipdesk.mobile.ui.components.VdPullRefresh(onRefresh = { viewModel.refreshAwait() }) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -206,6 +207,7 @@ fun DashboardScreen(
             }
             state.error?.let { Text(it, fontSize = 12.sp, color = c.danger) }
             Spacer(Modifier.height(24.dp))
+        }
         }
     }
 }

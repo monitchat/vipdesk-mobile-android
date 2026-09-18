@@ -97,6 +97,9 @@ class DashboardViewModel(
         }
     }
 
+    /** Puxar para atualizar. */
+    suspend fun refreshAwait() { fetch(); fetchStats() }
+
     fun setPeriod(period: String) {
         if (_uiState.value.period == period) return
         _uiState.value = _uiState.value.copy(period = period)

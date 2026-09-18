@@ -313,10 +313,17 @@ interface ApiService {
     // ============ ESTATÍSTICAS (dashboard — mesmos endpoints da web) ============
 
     @GET("statistic")
-    suspend fun getStatistics(@Query("filter") filterJson: String): Response<StatisticsResponse>
+    suspend fun getStatistics(
+        @Query("filter") filterJson: String,
+        // no_cache=1: o backend cacheia períodos longos por 5 min; o app sempre quer o estado atual
+        @Query("no_cache") noCache: Int
+    ): Response<StatisticsResponse>
 
     @GET("statistic/statisticsCount")
-    suspend fun getStatisticsCount(@Query("filter") filterJson: String): Response<StatisticsCountResponse>
+    suspend fun getStatisticsCount(
+        @Query("filter") filterJson: String,
+        @Query("no_cache") noCache: Int
+    ): Response<StatisticsCountResponse>
 
     // ============ MOBILE ============
 

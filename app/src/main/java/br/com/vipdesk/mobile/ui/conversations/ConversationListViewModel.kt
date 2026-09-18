@@ -91,6 +91,23 @@ class ConversationListViewModel(
     /** Recarrega sem piscar a tela (volta do segundo plano, eventos do socket). */
     fun refreshSilently() = silentRefresh()
 
+    /** Puxar para atualizar: suspende até a lista chegar, para o indicador sumir na hora certa. */
+    suspend fun refreshAwait() {
+        val result = conversationRepository.getConversations(
+            status = _uiState.value.currentStatus,
+            media = _uiState.value.currentMedia
+        )
+        result.onSuccess { conversations ->
+            _uiState.value = _uiState.value.copy(
+                conversations = conversations,
+                filteredConversations = applyFilters(conversations, _uiState.value.currentMedia, _uiState.value.searchQuery),
+                counts = conversationRepository.lastCounts ?: _uiState.value.counts,
+                channelCounts = conversationRepository.lastChannelCounts ?: _uiState.value.channelCounts,
+                error = null
+            )
+        }.onFailure { _uiState.value = _uiState.value.copy(error = it.message) }
+    }
+
     private fun silentRefresh() {
         viewModelScope.launch {
             val result = conversationRepository.getConversations(

@@ -171,10 +171,11 @@ fun AgendaScreen(onConversationClick: (Int) -> Unit, onToast: (String) -> Unit) 
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.divider))
 
+        br.com.vipdesk.mobile.ui.components.VdPullRefresh(onRefresh = { reloadTick++; kotlinx.coroutines.delay(600) }) {
         when {
             loading && items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.primary) }
-            error != null -> VdEmptyState(Icons.Outlined.CalendarMonth, "Não foi possível carregar", error ?: "")
-            items.isEmpty() -> VdEmptyState(Icons.Outlined.CalendarMonth, "Nenhum agendamento", if (mode == "Dia") "Nada marcado para este dia." else "Nada marcado nesta semana.")
+            error != null -> androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize()) { item { VdEmptyState(Icons.Outlined.CalendarMonth, "Não foi possível carregar", error ?: "") } }
+            items.isEmpty() -> androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize()) { item { VdEmptyState(Icons.Outlined.CalendarMonth, "Nenhum agendamento", if (mode == "Dia") "Nada marcado para este dia." else "Nada marcado nesta semana.") } }
             else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp)) {
                 if (mode == "Dia") {
                     items.forEach { a -> TimeSlotRow(a) { sheet = a } }
@@ -187,6 +188,7 @@ fun AgendaScreen(onConversationClick: (Int) -> Unit, onToast: (String) -> Unit) 
                 }
                 Spacer(Modifier.height(24.dp))
             }
+        }
         }
     }
 

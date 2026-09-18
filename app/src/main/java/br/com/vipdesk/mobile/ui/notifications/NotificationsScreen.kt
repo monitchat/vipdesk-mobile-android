@@ -115,13 +115,14 @@ fun NotificationsScreen(
             }
         })
 
+        br.com.vipdesk.mobile.ui.components.VdPullRefresh(onRefresh = { viewModel.refreshAwait() }) {
         when {
             state.isLoading && state.items.isEmpty() -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = c.accent)
                 }
             }
-            state.error != null && state.items.isEmpty() -> {
+            state.error != null && state.items.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) { item {
                 VdEmptyState(
                     icon = Icons.Outlined.Notifications,
                     title = "Não foi possível carregar",
@@ -131,8 +132,8 @@ fun NotificationsScreen(
                     ctaLabel = "Tentar novamente",
                     onCta = { viewModel.load() }
                 )
-            }
-            state.items.isEmpty() -> {
+            } }
+            state.items.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) { item {
                 VdEmptyState(
                     icon = Icons.Outlined.CheckCircle,
                     title = "Tudo em dia",
@@ -140,7 +141,7 @@ fun NotificationsScreen(
                     iconTint = VdSuccess,
                     iconBg = VdSuccess.copy(alpha = 0.12f)
                 )
-            }
+            } }
             else -> {
                 val groups = state.items.groupBy { groupLabel(it.createdAt) }
                 val order = listOf("Agora", "Hoje", "Ontem", "Anteriores")
@@ -163,6 +164,7 @@ fun NotificationsScreen(
                     }
                 }
             }
+        }
         }
     }
 }

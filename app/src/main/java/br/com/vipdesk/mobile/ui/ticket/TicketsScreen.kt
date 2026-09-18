@@ -94,17 +94,23 @@ fun TicketsScreen(
             }
         )
 
+        br.com.vipdesk.mobile.ui.components.VdPullRefresh(onRefresh = { viewModel.refreshAwait() }) {
         when {
             state.isLoading && state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = c.primary)
             }
-            state.items.isEmpty() -> VdEmptyState(
-                icon = Icons.Outlined.ConfirmationNumber,
-                title = "Nenhum ticket aqui",
-                subtitle = "Tente outro filtro ou termo de busca.",
-                ctaLabel = "Criar ticket",
-                onCta = onCreateTicket
-            )
+            // LazyColumn mesmo vazio: sem scroll o "puxar para atualizar" não é capturado
+            state.items.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) {
+                item {
+                    VdEmptyState(
+                        icon = Icons.Outlined.ConfirmationNumber,
+                        title = "Nenhum ticket aqui",
+                        subtitle = "Tente outro filtro ou termo de busca.",
+                        ctaLabel = "Criar ticket",
+                        onCta = onCreateTicket
+                    )
+                }
+            }
             else -> {
                 val listState = androidx.compose.foundation.lazy.rememberLazyListState()
                 // Pede a próxima página quando o último item fica visível
@@ -129,6 +135,7 @@ fun TicketsScreen(
                     }
                 }
             }
+        }
         }
     }
 }

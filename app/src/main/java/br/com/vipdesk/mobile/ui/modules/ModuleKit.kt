@@ -318,10 +318,17 @@ fun ModuleListScreen(
                     if (filters.isNotEmpty()) VdPillRow(contentPaddingStart = 0.dp) { filters.forEach { f -> VdPill(f, filter == f, { filter = f }) } }
                 }) else null
             )
+            // Puxar para atualizar em qualquer módulo
+            br.com.vipdesk.mobile.ui.components.VdPullRefresh(onRefresh = {
+                load(query, filter, 0, pageSize).fold(
+                    onSuccess = { rows = it.rows; total = it.total; error = null },
+                    onFailure = { error = it.message ?: "Erro ao carregar" }
+                )
+            }) {
             when {
                 loading && rows.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.primary) }
-                error != null && rows.isEmpty() -> VdEmptyState(Icons.Outlined.Inbox, "Não foi possível carregar", error ?: "", ctaLabel = "Tentar novamente", onCta = { version++ })
-                rows.isEmpty() -> VdEmptyState(Icons.Outlined.Inbox, emptyTitle, emptySubtitle)
+                error != null && rows.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) { item { VdEmptyState(Icons.Outlined.Inbox, "Não foi possível carregar", error ?: "", ctaLabel = "Tentar novamente", onCta = { version++ }) } }
+                rows.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) { item { VdEmptyState(Icons.Outlined.Inbox, emptyTitle, emptySubtitle) } }
                 else -> LazyColumn(
                     state = listState, modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -332,6 +339,7 @@ fun ModuleListScreen(
                     }
                     if (loadingMore) item("more") { Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.primary, modifier = Modifier.size(22.dp)) } }
                 }
+            }
             }
         }
         toast?.let { Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp)) { VdToast(it) } }

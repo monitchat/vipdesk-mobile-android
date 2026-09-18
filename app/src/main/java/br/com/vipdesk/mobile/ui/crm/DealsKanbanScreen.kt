@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddCircleOutline
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.ViewKanban
 import androidx.compose.material3.CircularProgressIndicator
@@ -116,7 +117,11 @@ fun DealsKanbanScreen(
             title = "Negócios",
             subtitle = pipeline?.let { "Pipeline: ${it.name}" },
             onBack = onBack,
-            actions = { VdHeaderIcon(Icons.Outlined.AddCircleOutline, "Novo negócio", onCreateDeal, tint = c.primary) },
+            actions = {
+                // Colunas rolam na horizontal: atualização manual fica no cabeçalho
+                VdHeaderIcon(Icons.Outlined.Refresh, "Atualizar", { CrmEvents.dealsVersion++; toast = "Negócios atualizados" })
+                VdHeaderIcon(Icons.Outlined.AddCircleOutline, "Novo negócio", onCreateDeal, tint = c.primary)
+            },
             below = {
                 Row(
                     Modifier.fillMaxWidth().height(36.dp).clip(RoundedCornerShape(8.dp)).border(1.dp, c.border, RoundedCornerShape(8.dp))
@@ -139,8 +144,9 @@ fun DealsKanbanScreen(
             error != null -> VdEmptyState(Icons.Outlined.ViewKanban, "Não foi possível carregar", error ?: "")
             stages.isEmpty() -> VdEmptyState(Icons.Outlined.ViewKanban, "Nenhum pipeline", "Configure um funil na versão web.")
             else -> {
+                br.com.vipdesk.mobile.ui.components.VdPullRefresh(modifier = Modifier.weight(1f), onRefresh = { CrmEvents.dealsVersion++; kotlinx.coroutines.delay(600) }) {
                 Row(
-                    Modifier.weight(1f).fillMaxWidth().horizontalScroll(scroll).padding(start = 12.dp, end = 12.dp, top = 10.dp),
+                    Modifier.fillMaxSize().horizontalScroll(scroll).padding(start = 12.dp, end = 12.dp, top = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     stages.forEachIndexed { i, stage ->
@@ -154,6 +160,7 @@ fun DealsKanbanScreen(
                             }
                         }
                     }
+                }
                 }
                 // Indicador de colunas
                 Row(

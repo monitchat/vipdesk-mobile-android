@@ -74,6 +74,7 @@ import br.com.vipdesk.mobile.ui.theme.VdSuccess
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import br.com.vipdesk.mobile.ui.components.VdEmptyState
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.ViewKanban
 import kotlinx.coroutines.delay
 
@@ -93,7 +94,7 @@ fun KanbanScreen(
     var assignOptions by remember { mutableStateOf<List<Pair<Int, String>>>(emptyList()) }
     // Arrastar cartão entre colunas (tela 14: long-press + drag)
     val drag = rememberDragBoardState()
-    LaunchedEffect(Unit) { if (KanbanStore.columns.isEmpty()) KanbanStore.load() }
+    LaunchedEffect(Unit) { KanbanStore.load() }
     var menuCard by remember { mutableStateOf<DemoKanbanCard?>(null) }
     var showMove by remember { mutableStateOf(false) }
     var newTaskColumn by remember { mutableStateOf<String?>(null) }
@@ -125,6 +126,9 @@ fun KanbanScreen(
                 },
                 onBack = onBack,
                 actions = {
+                    // Quadro rola na horizontal: o "puxar para atualizar" não funciona aqui,
+                    // então a atualização manual fica no cabeçalho.
+                    VdHeaderIcon(Icons.Outlined.Refresh, "Atualizar", { scope.launch { KanbanStore.load(); toast = "Quadro atualizado" } })
                     if (KanbanStore.boards.size > 1) VdHeaderIcon(Icons.Outlined.ViewKanban, "Trocar quadro", { showBoards = true })
                     VdHeaderIcon(Icons.Default.Add, "Nova tarefa", {
                         if (columns.isEmpty()) { toast = KanbanStore.error ?: "Quadro sem colunas" } else {
@@ -140,10 +144,11 @@ fun KanbanScreen(
                 VdEmptyState(Icons.Outlined.ViewKanban, "Nenhum quadro", "Crie um quadro de tarefas na versão web para usá-lo aqui.")
             }
 
+            br.com.vipdesk.mobile.ui.components.VdPullRefresh(modifier = Modifier.weight(1f), onRefresh = { KanbanStore.load() }) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
+                    .fillMaxHeight()
                     .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -223,6 +228,7 @@ fun KanbanScreen(
                         }
                     }
                 }
+            }
             }
         }
 

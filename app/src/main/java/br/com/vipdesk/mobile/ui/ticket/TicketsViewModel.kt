@@ -44,6 +44,9 @@ class TicketsViewModel(
         }
     }
 
+    /** Puxar para atualizar. */
+    suspend fun refreshAwait() = fetch()
+
     fun refresh() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isRefreshing = true)

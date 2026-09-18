@@ -12,16 +12,14 @@ class AuthInterceptor(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val token = runBlocking { tokenManager.getToken() }
-        val request = if (token != null) {
-            chain.request().newBuilder()
-                .addHeader("Authorization", "Bearer $token")
-                .addHeader("Accept", "application/json")
-                .build()
-        } else {
-            chain.request().newBuilder()
-                .addHeader("Accept", "application/json")
-                .build()
-        }
+        // Sem cache em nenhuma camada: o app sempre mostra o estado atual da API
+        // (OkHttp não tem cache configurado; os headers barram proxies/CDN).
+        val builder = chain.request().newBuilder()
+            .addHeader("Accept", "application/json")
+            .addHeader("Cache-Control", "no-cache, no-store, max-age=0")
+            .addHeader("Pragma", "no-cache")
+        if (token != null) builder.addHeader("Authorization", "Bearer $token")
+        val request = builder.build()
         val response = chain.proceed(request)
         if (token != null && isSessionLost(request.url.encodedPath, response)) {
             SessionEvents.expire("Sua sessão expirou. Entre novamente.")

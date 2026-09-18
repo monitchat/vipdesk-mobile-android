@@ -156,22 +156,29 @@ fun ConversationListScreen(
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.divider))
 
-        when {
-            state.isLoading && list.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = c.primary)
-            }
-            list.isEmpty() -> VdEmptyState(
-                icon = Icons.Outlined.Forum,
-                title = "Nenhuma conversa por aqui",
-                subtitle = "Você está em dia. Novas mensagens dos seus canais aparecem em tempo real.",
-                ctaLabel = "Nova conversa",
-                onCta = onNewConversation
-            )
-            else -> LazyColumn(Modifier.fillMaxSize()) {
-                items(list, key = { it.id }) { conv ->
-                    ConversationRow(conv, state.currentUserId) { onConversationClick(conv.id) }
+        // Puxar para atualizar (também funciona com a lista vazia)
+        br.com.vipdesk.mobile.ui.components.VdPullRefresh(onRefresh = { viewModel.refreshAwait() }) {
+            when {
+                state.isLoading && list.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = c.primary)
                 }
-                item { Spacer(Modifier.height(8.dp)) }
+                list.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        VdEmptyState(
+                            icon = Icons.Outlined.Forum,
+                            title = "Nenhuma conversa por aqui",
+                            subtitle = "Você está em dia. Novas mensagens dos seus canais aparecem em tempo real.",
+                            ctaLabel = "Nova conversa",
+                            onCta = onNewConversation
+                        )
+                    }
+                }
+                else -> LazyColumn(Modifier.fillMaxSize()) {
+                    items(list, key = { it.id }) { conv ->
+                        ConversationRow(conv, state.currentUserId) { onConversationClick(conv.id) }
+                    }
+                    item { Spacer(Modifier.height(8.dp)) }
+                }
             }
         }
     }

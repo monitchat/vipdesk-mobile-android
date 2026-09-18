@@ -156,6 +156,12 @@ fun ContactsListScreen(
             }
         )
 
+        br.com.vipdesk.mobile.ui.components.VdPullRefresh(onRefresh = {
+            AppContainer.crmRepository.searchContactsPage(query, take = pageSize).fold(
+                onSuccess = { contacts = it.items; total = it.total; error = null },
+                onFailure = { error = it.message }
+            )
+        }) {
         when {
             loading && contacts.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.primary) }
             error != null -> VdEmptyState(Icons.Outlined.PersonSearch, "Não foi possível carregar", error ?: "")
@@ -178,6 +184,7 @@ fun ContactsListScreen(
                 }
                 item { Spacer(Modifier.height(24.dp)) }
             }
+        }
         }
     }
 }

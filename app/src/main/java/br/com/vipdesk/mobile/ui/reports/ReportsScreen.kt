@@ -65,13 +65,14 @@ fun ReportsScreen(onBack: () -> Unit) {
     var counts by remember { mutableStateOf<StatisticsCountResponse?>(null) }
     var agents by remember { mutableStateOf<List<JsonObject>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var reloadTick by remember { mutableStateOf(0) }
 
-    LaunchedEffect(period) {
+    LaunchedEffect(period, reloadTick) {
         stats = null; counts = null; agents = null; error = null
         AppContainer.mobileRepository.getStatistics(period).fold({ stats = it }, { error = it.message })
         AppContainer.mobileRepository.getStatisticsCount(period).onSuccess { counts = it }
         val filter = """{"created":"$period","by":"company","user_id":null,"current_status":null,"department_id":null,"start":null,"end":null,"start_date":null,"end_date":null}"""
-        apiGet("statistic/ticketsDashboardTable", mapOf("filter" to filter, "take" to "100")).fold(
+        apiGet("statistic/ticketsDashboardTable", mapOf("filter" to filter, "take" to "100", "no_cache" to "1")).fold(
             { agents = it.rows().first }, { agents = emptyList() }
         )
     }
@@ -104,7 +105,8 @@ fun ReportsScreen(onBack: () -> Unit) {
         when {
             error != null && stats == null -> VdEmptyState(Icons.Outlined.BarChart, "Não foi possível carregar", error ?: "")
             stats == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.primary) }
-            else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            else -> br.com.vipdesk.mobile.ui.components.VdPullRefresh(onRefresh = { reloadTick++; kotlinx.coroutines.delay(600) }) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 val s = stats!!
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     VdKpiCard("${s.openTickets.count}", "EM ABERTO", modifier = Modifier.weight(1f), topAccent = Tint.blueFg)
@@ -147,6 +149,7 @@ fun ReportsScreen(onBack: () -> Unit) {
                     if (ct.status.isNotEmpty()) { VdSectionLabel("Por status"); Bars(ct.status.map { it.label to it.total }) }
                 }
                 Spacer(Modifier.height(24.dp))
+                }
             }
         }
     }

@@ -535,7 +535,7 @@ private fun NovaTarefaContent(
     var customer by remember { mutableStateOf("") }
     var label by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) { if (KanbanStore.columns.isEmpty()) KanbanStore.load() }
+    LaunchedEffect(Unit) { KanbanStore.load() }
     val columns = KanbanStore.columns
     var column by remember(columns) { mutableStateOf(columns.getOrNull(1)?.name ?: columns.firstOrNull()?.name ?: "") }
 

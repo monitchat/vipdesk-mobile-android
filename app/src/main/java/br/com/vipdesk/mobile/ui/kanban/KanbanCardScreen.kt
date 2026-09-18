@@ -71,7 +71,7 @@ import kotlinx.coroutines.delay
 fun KanbanCardScreen(cardId: String, onBack: () -> Unit) {
     val c = AppTheme.colors
     val scope = rememberCoroutineScope()
-    LaunchedEffect(cardId) { if (KanbanStore.columns.isEmpty()) KanbanStore.load(); KanbanStore.loadChecklist(cardId); KanbanStore.loadComments(cardId) }
+    LaunchedEffect(cardId) { KanbanStore.load(); KanbanStore.loadChecklist(cardId); KanbanStore.loadComments(cardId) }
     val column = KanbanStore.columnOf(cardId)
     val card = column?.cards?.find { it.id == cardId }
     var toast by remember { mutableStateOf<String?>(null) }

@@ -81,7 +81,7 @@ fun HelpdeskHubScreen(
     var loadError by remember { mutableStateOf<String?>(null) }
     var reloadKey by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(Unit) { if (br.com.vipdesk.mobile.ui.kanban.KanbanStore.boards.isEmpty()) br.com.vipdesk.mobile.ui.kanban.KanbanStore.load() }
+    LaunchedEffect(Unit) { br.com.vipdesk.mobile.ui.kanban.KanbanStore.load() }
     LaunchedEffect(reloadKey) {
         loadError = null
         AppContainer.mobileRepository.getDashboard().fold(
@@ -100,6 +100,11 @@ fun HelpdeskHubScreen(
             VdHeaderIcon(Icons.Outlined.Notifications, "Notificações", onNotifications, badge = unreadNotifications)
         }
 
+        br.com.vipdesk.mobile.ui.components.VdPullRefresh(onRefresh = {
+            AppContainer.mobileRepository.getDashboard().onSuccess { dash = it }
+            AppContainer.mobileRepository.getStatistics("today").onSuccess { stats = it }
+            br.com.vipdesk.mobile.ui.kanban.KanbanStore.load()
+        }) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -172,6 +177,7 @@ fun HelpdeskHubScreen(
                 modifier = Modifier.clickable(onClick = onCreateTicket).padding(vertical = 4.dp)
             )
             Spacer(Modifier.height(16.dp))
+        }
         }
     }
 }
